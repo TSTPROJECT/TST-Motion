@@ -12,7 +12,8 @@ import { Stage } from "./Stage";
 import { LayersPanel } from "./LayersPanel";
 import { PropsPanel } from "./PropsPanel";
 import { Timeline } from "./Timeline";
-import { Modal, SettingsDialog, settingsOpen, confirmBox } from "./Dialogs";
+import { SettingsDialog, settingsOpen, confirmBox } from "./Dialogs";
+import { ExportDialog } from "./ExportDialog";
 import { TopToggles } from "./Home";
 import { toast, installPrompt, installed, install, isIos } from "./shell";
 import { openFile, pickFile } from "./open";
@@ -85,13 +86,14 @@ export function Editor() {
   useEffect(() => {
     const k = async (e: KeyboardEvent) => {
       const tg = e.target as HTMLElement;
-      if (tg.closest("input, textarea, select") || document.querySelector(".overlay")) return;
+      if (tg?.closest?.("input, textarea, select") || document.querySelector(".overlay")) return;
       const ctrl = e.ctrlKey || e.metaKey, pp = project.value; if (!pp) return;
       const key = e.key.toLowerCase();
       if (ctrl && key === "z") { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
       if (ctrl && key === "y") { e.preventDefault(); redo(); return; }
       if (ctrl && key === "s") { e.preventDefault(); void saveFile(); return; }
       if (ctrl && key === "o") { e.preventDefault(); void pickImages(); return; }
+      if (ctrl && key === "e") { e.preventDefault(); setExportInfo(true); return; }
       if (ctrl && key === "d") { e.preventDefault(); if (selected.value) duplicateLayer(selected.value); return; }
       if (ctrl) return;
       if (e.code === "Space") { e.preventDefault(); if (!e.repeat) playing.value = !playing.value; return; }
@@ -172,14 +174,7 @@ export function Editor() {
       <Timeline />
 
       {settingsOpen.value && <SettingsDialog />}
-      {exportInfo && (
-        <Modal title={t("export")} onClose={() => setExportInfo(false)} footer={<>
-          <button class="btn" onClick={() => setExportInfo(false)}>{t("close")}</button>
-          <button class="btn primary" onClick={() => { setExportInfo(false); void saveFile(); }}><Icon n="save" />{t("save_file")}</button>
-        </>}>
-          <p style={{ margin: 0, lineHeight: 1.6 }}>{t("export_soon")}</p>
-        </Modal>
-      )}
+      {exportInfo && <ExportDialog onClose={() => setExportInfo(false)} />}
     </div>
   );
 }

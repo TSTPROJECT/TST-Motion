@@ -247,7 +247,7 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
       else { s.auto = false; s.ox -= e.deltaX; s.oy -= e.deltaY; schedule(); }
     };
     const dbl = (e: MouseEvent) => { const r = o.getBoundingClientRect(); if (!pickLayer(e.clientX - r.left, e.clientY - r.top)) fit(); };
-    const key = (e: KeyboardEvent) => { if (e.code === "Space" && !(e.target as HTMLElement).closest("input, textarea, select")) s.space = e.type === "keydown"; };
+    const key = (e: KeyboardEvent) => { if (e.code === "Space" && !(e.target as HTMLElement)?.closest?.("input, textarea, select")) s.space = e.type === "keydown"; };
     o.addEventListener("pointerdown", down); o.addEventListener("pointermove", move);
     o.addEventListener("pointerup", up); o.addEventListener("pointercancel", up);
     o.addEventListener("wheel", wheel, { passive: false }); o.addEventListener("dblclick", dbl);

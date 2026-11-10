@@ -8,5 +8,5 @@ export default defineConfig({
   plugins: [preact()],
   clearScreen: false,
   build: { target: "chrome105", sourcemap: false, chunkSizeWarningLimit: 900 },
-  server: { host: "127.0.0.1", port: 5180, strictPort: true },
+  server: { host: "127.0.0.1", port: 5180, strictPort: true, watch: { ignored: ["**/src-tauri/**"] } },
 });
