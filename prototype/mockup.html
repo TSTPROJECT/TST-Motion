@@ -1,0 +1,900 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TST Motion ต้นแบบ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Floating-panel editor: layers card | dotted canvas with a tool dock | properties card, timeline card below. Phone: canvas on top, tabbed sheet below. */
+:root {
+  --bg: #eceef3; --surface: #ffffff; --surface-2: #f3f4f8; --canvas: #e2e5ec; --dot: #c6cbd6;
+  --line: #e0e3ea; --line-2: #cdd2dc; --fg: #151821; --muted: #697186;
+  --accent: #3b74ff; --accent-soft: rgba(59,116,255,.12); --on-accent: #ffffff;
+  --key: #f2a51a; --key-line: #8a5a00; --bone: #ff5f9e; --ok: #13a067; --scrim: rgba(16,19,30,.42);
+  --shadow: 0 1px 2px rgba(20,24,40,.05), 0 6px 20px rgba(20,24,40,.06);
+  --shadow-lg: 0 20px 60px rgba(20,24,40,.22);
+  --font-ui: "Anuphan", "Leelawadee UI", "Tahoma", system-ui, sans-serif;
+  --font-num: "JetBrains Mono", ui-monospace, "Consolas", monospace;
+  --r: 16px; --lw: 128px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0c0e13; --surface: #161920; --surface-2: #1e222b; --canvas: #101218; --dot: #252a35;
+  --line: #242833; --line-2: #333947; --fg: #eceef4; --muted: #8b93a6;
+  --accent: #5b8cff; --accent-soft: rgba(91,140,255,.16); --on-accent: #ffffff;
+  --key: #f6b53a; --key-line: #4a3000; --bone: #ff77ae; --ok: #45d091; --scrim: rgba(0,0,0,.6);
+  --shadow: 0 1px 2px rgba(0,0,0,.35), 0 8px 26px rgba(0,0,0,.25); --shadow-lg: 0 24px 70px rgba(0,0,0,.55);
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0c0e13; --surface: #161920; --surface-2: #1e222b; --canvas: #101218; --dot: #252a35;
+  --line: #242833; --line-2: #333947; --fg: #eceef4; --muted: #8b93a6;
+  --accent: #5b8cff; --accent-soft: rgba(91,140,255,.16); --on-accent: #ffffff;
+  --key: #f6b53a; --key-line: #4a3000; --bone: #ff77ae; --ok: #45d091; --scrim: rgba(0,0,0,.6);
+  --shadow: 0 1px 2px rgba(0,0,0,.35), 0 8px 26px rgba(0,0,0,.25); --shadow-lg: 0 24px 70px rgba(0,0,0,.55);
+  color-scheme: dark; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-ui); font-size: 14px; -webkit-font-smoothing: antialiased; }
+button, select, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: default; opacity: .45; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+.app { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; padding-block: 10px; padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); }
+
+.top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.logo { display: flex; align-items: center; gap: 10px; min-width: 0; margin-right: auto; }
+.mark { width: 32px; height: 32px; border-radius: 10px; background: var(--fg); display: grid; place-items: center; flex: none; }
+.mark svg { width: 20px; height: 20px; }
+.proj { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.proj b { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.proj small { color: var(--muted); font-size: 11.5px; display: flex; align-items: center; gap: 5px; white-space: nowrap; }
+.proj small::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+.ibtn { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; }
+.ibtn:hover { border-color: var(--line-2); }
+.btn { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font-size: 13.5px; font-weight: 500; white-space: nowrap; }
+.btn:hover { border-color: var(--line-2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.primary:hover { filter: brightness(1.06); }
+.seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); }
+.seg button { border: 0; background: none; height: 28px; padding: 0 10px; border-radius: 7px; font-size: 12.5px; color: var(--muted); font-weight: 500; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+
+.work { display: grid; grid-template-columns: 236px minmax(0, 1fr) 268px; gap: 10px; min-height: 0; }
+.pane { min-height: 0; display: flex; flex-direction: column; }
+.pane-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 14px 8px; }
+.pane-h h2 { margin: 0; font-size: 13px; font-weight: 600; }
+.pane-h span { font-size: 11.5px; color: var(--muted); }
+.scroll { overflow-y: auto; min-height: 0; }
+
+.layers { padding: 0 8px 10px; display: flex; flex-direction: column; gap: 1px; }
+.lyr { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 6px 0 calc(6px + var(--d) * 16px); border-radius: 10px; cursor: pointer; font-size: 13px; }
+.lyr:hover { background: var(--surface-2); }
+.lyr.sel { background: var(--accent-soft); color: var(--accent); }
+.lyr .th { width: 28px; height: 28px; border-radius: 7px; background: var(--surface-2); border: 1px solid var(--line); flex: none; }
+.lyr .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lyr .tag { font-size: 10.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 0 6px; }
+.lyr .eye { border: 0; background: none; width: 26px; height: 26px; border-radius: 6px; color: var(--muted); display: grid; place-items: center; }
+.lyr .eye:hover { background: var(--surface); }
+.lyr.off .nm, .lyr.off .th { opacity: .4; }
+
+.stage { position: relative; min-height: 0; border-radius: var(--r); background-color: var(--canvas); background-image: radial-gradient(var(--dot) 1px, transparent 1.2px); background-size: 18px 18px; border: 1px solid var(--line); overflow: hidden; display: flex; flex-direction: column; }
+.stage-top { position: absolute; top: 12px; left: 12px; right: 12px; display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; pointer-events: none; z-index: 2; }
+.stage-top > * { pointer-events: auto; }
+.hint { max-width: 40ch; font-size: 12px; line-height: 1.5; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px; box-shadow: var(--shadow); }
+#stage { flex: 1; width: 100%; min-height: 0; padding: 58px 16px 76px; touch-action: none; user-select: none; display: block; }
+#stage .part { cursor: grab; }
+#stage .part.sel .shape { stroke: var(--accent); }
+#frame-line { fill: none; stroke: var(--line-2); stroke-width: 1; }
+.dock { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 4px; padding: 5px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); z-index: 2; max-width: calc(100% - 24px); }
+.tool { display: flex; align-items: center; gap: 6px; height: 38px; padding: 0 12px; border: 0; background: none; border-radius: 10px; color: var(--muted); font-size: 12.5px; font-weight: 500; white-space: nowrap; }
+.tool:hover { color: var(--fg); background: var(--surface-2); }
+.tool[aria-pressed="true"] { background: var(--fg); color: var(--surface); }
+.dock .sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
+.bgsw { width: 26px; height: 26px; border-radius: 8px; border: 2px solid transparent; padding: 0; box-shadow: inset 0 0 0 1px var(--line-2); }
+.bgsw[aria-pressed="true"] { border-color: var(--accent); }
+.bgsw.alpha { background: repeating-conic-gradient(#d4d7df 0 25%, #f6f7f9 0 50%) 0 0 / 10px 10px; }
+
+.props { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 14px; }
+.who { display: flex; flex-direction: column; gap: 2px; }
+.who b { font-size: 18px; font-weight: 600; }
+.who span { font-size: 12px; color: var(--muted); }
+.knav { display: flex; align-items: center; gap: 6px; padding: 6px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); }
+.knav .ibtn { width: 32px; height: 32px; border-radius: 8px; }
+.kdia { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; height: 32px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font-size: 12.5px; font-weight: 500; }
+.kdia i { width: 10px; height: 10px; transform: rotate(45deg); border: 1.6px solid var(--key); border-radius: 2px; }
+.kdia.on i { background: var(--key); }
+.grp { display: flex; flex-direction: column; gap: 10px; }
+.grp h3 { margin: 0; font-size: 11.5px; font-weight: 600; color: var(--muted); letter-spacing: .04em; }
+.f { display: grid; grid-template-columns: 72px minmax(0, 1fr) 52px; gap: 10px; align-items: center; }
+.f label { font-size: 12.5px; color: var(--muted); }
+.f output { font-family: var(--font-num); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; background: var(--surface-2); border-radius: 6px; padding: 3px 6px; }
+input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 20px; background: transparent; }
+input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 99px; background: var(--line-2); }
+input[type=range]::-moz-range-track { height: 4px; border-radius: 99px; background: var(--line-2); }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; margin-top: -6px; border-radius: 50%; background: var(--surface); border: 2px solid var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--surface); border: 2px solid var(--accent); }
+.eases { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.ease { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px 6px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font-size: 11.5px; color: var(--muted); }
+.ease svg { width: 34px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.ease[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+.tl { display: flex; flex-direction: column; min-height: 0; }
+.tl-h { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.tl-h .ibtn { width: 32px; height: 32px; border-radius: 8px; }
+.play { width: 38px; height: 38px; border-radius: 50%; border: 0; background: var(--fg); color: var(--surface); display: grid; place-items: center; }
+.play svg { width: 16px; height: 16px; fill: currentColor; stroke: none; }
+.tc { font-family: var(--font-num); font-size: 13px; font-variant-numeric: tabular-nums; padding: 0 6px; }
+.tc span { color: var(--muted); }
+.tl-meta { margin-left: auto; font-size: 12px; color: var(--muted); }
+.tl-scroll { max-height: 196px; overflow: auto; }
+.tl-inner { position: relative; touch-action: none; min-width: 520px; }
+.row { display: grid; grid-template-columns: var(--lw) minmax(0, 1fr); height: 26px; }
+.row .lab { position: sticky; left: 0; z-index: 1; font-size: 12px; padding: 0 10px 0 calc(10px + var(--d) * 10px); display: flex; align-items: center; gap: 6px; background: var(--surface); border-right: 1px solid var(--line); color: var(--muted); white-space: nowrap; overflow: hidden; cursor: pointer; }
+.row .lab::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--line-2); flex: none; }
+.row.sel .lab { color: var(--fg); font-weight: 500; }
+.row.sel .lab::before { background: var(--accent); }
+.row.sel .trk { background: var(--accent-soft); }
+.trk { position: relative; border-bottom: 1px solid var(--line); }
+.trk::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px dashed var(--line); }
+.ruler { position: sticky; top: 0; z-index: 3; height: 24px; }
+.ruler .lab { cursor: default; z-index: 4; }
+.ruler .lab::before { display: none; }
+.ruler .trk { background: var(--surface); font-family: var(--font-num); font-size: 10px; color: var(--muted); }
+.ruler .trk::before { display: none; }
+.tick { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--line); padding-left: 4px; line-height: 24px; }
+.kf { position: absolute; top: 50%; width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; transform: rotate(45deg); background: var(--key); border: 1.5px solid var(--key-line); padding: 0; border-radius: 2.5px; z-index: 1; }
+.kf.now { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--fg); }
+.playhead { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--accent); left: calc(var(--lw) + (100% - var(--lw)) * var(--frac, 0)); pointer-events: none; z-index: 5; }
+.playhead::before { content: ""; position: absolute; top: 2px; left: -6px; width: 14px; height: 14px; border-radius: 4px 4px 7px 7px; background: var(--accent); }
+
+.tabs { display: none; }
+
+.overlay { position: fixed; inset: 0; background: var(--scrim); display: grid; place-items: center; padding: 16px; z-index: 30; }
+.dlg { width: min(900px, 100%); max-height: calc(100% - 8px); overflow-y: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; }
+.dlg-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px 22px 6px; }
+.dlg-h h3 { margin: 0; font-size: 20px; font-weight: 600; }
+.dlg-h p { margin: 4px 0 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.dlg-b { padding: 14px 22px; display: flex; flex-direction: column; gap: 16px; }
+.dlg-f { display: flex; gap: 10px; justify-content: flex-end; align-items: center; flex-wrap: wrap; padding: 14px 22px 20px; border-top: 1px solid var(--line); }
+.dlg-f .grow { margin-right: auto; font-size: 12.5px; color: var(--muted); }
+.lbl { font-size: 12.5px; font-weight: 600; margin-bottom: 8px; display: block; }
+
+.cut { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 20px; }
+.cut-left { display: flex; flex-direction: column; gap: 10px; }
+.drop { display: flex; align-items: center; gap: 12px; border: 1.5px dashed var(--line-2); border-radius: 14px; padding: 12px 14px; cursor: pointer; }
+.drop:hover { border-color: var(--accent); }
+.drop .ic { width: 38px; height: 38px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; flex: none; }
+.drop b { display: block; font-size: 13px; font-weight: 500; }
+.drop small { color: var(--muted); font-family: var(--font-num); font-size: 10.5px; }
+.thumbs { display: flex; gap: 6px; flex-wrap: wrap; }
+.thumbs img { width: 44px; height: 44px; object-fit: contain; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line); }
+.prev { position: relative; border-radius: 14px; border: 1px solid var(--line); background: repeating-conic-gradient(var(--surface-2) 0 25%, var(--surface) 0 50%) 0 0 / 16px 16px; aspect-ratio: 1 / 1.05; max-width: 100%; overflow: hidden; }
+.prev svg { width: 100%; height: 100%; display: block; }
+.prev .pc { transition: transform .6s cubic-bezier(.3,1.35,.5,1), opacity .2s; }
+.prev.done .pc .shape { stroke: var(--gc); stroke-width: 3.5; }
+.prev.dim .pc:not(.hl) { opacity: .18; }
+.scan { position: absolute; left: 0; right: 0; height: 40%; top: -40%; background: linear-gradient(to bottom, transparent, var(--accent-soft) 70%, var(--accent) 71%, transparent 72%); pointer-events: none; }
+.prev.busy .scan { animation: scan .9s ease-in-out; }
+@keyframes scan { to { top: 100%; } }
+.cut-right { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.levels { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.lvl { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.lvl b { font-size: 13.5px; font-weight: 600; }
+.lvl span { font-size: 11.5px; color: var(--muted); }
+.lvl[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.lvl[aria-pressed="true"] b { color: var(--accent); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); font-size: 12.5px; font-weight: 500; color: var(--muted); }
+.chip svg { width: 14px; height: 14px; }
+.chip[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+.tile { border: 1px solid var(--line); border-radius: 12px; padding: 6px 6px 7px; display: flex; flex-direction: column; align-items: center; gap: 4px; background: var(--surface); font-size: 11.5px; text-align: center; cursor: default; }
+.tile svg { width: 100%; height: 52px; border-radius: 8px; background: var(--surface-2); }
+.tile b { font-weight: 500; line-height: 1.25; }
+.tile small { color: var(--muted); font-size: 10.5px; }
+.tile:hover { border-color: var(--gc); }
+.tile .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gc); display: inline-block; margin-right: 4px; }
+.empty { border: 1px dashed var(--line-2); border-radius: 12px; padding: 22px 14px; text-align: center; color: var(--muted); font-size: 12.5px; line-height: 1.6; }
+.count { font-size: 12.5px; color: var(--muted); font-weight: 400; margin-left: 6px; }
+.trust { display: flex; gap: 10px; align-items: flex-start; font-size: 12px; line-height: 1.6; color: var(--muted); background: var(--surface-2); border-radius: 12px; padding: 10px 12px; }
+.trust svg { color: var(--ok); margin-top: 1px; }
+.trust b { color: var(--fg); font-weight: 600; }
+
+.fmts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.fmt { position: relative; text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 14px; padding: 14px; display: flex; gap: 12px; align-items: flex-start; }
+.fmt .pv { width: 52px; height: 52px; border-radius: 10px; flex: none; display: grid; place-items: center; font-family: var(--font-num); font-size: 11px; font-weight: 500; color: #fff; }
+.fmt .pv.alpha { background: repeating-conic-gradient(#cfd3dc 0 25%, #f3f4f7 0 50%) 0 0 / 12px 12px; color: #2b2f3a; }
+.fmt b { display: block; font-size: 14.5px; font-weight: 600; margin-bottom: 2px; }
+.fmt span { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.fmt .ck { position: absolute; top: 12px; right: 12px; width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--line-2); display: grid; place-items: center; }
+.fmt[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.fmt[aria-pressed="true"] .ck { background: var(--accent); border-color: var(--accent); }
+.fmt[aria-pressed="true"] .ck::after { content: ""; width: 9px; height: 5px; border: 2px solid var(--on-accent); border-top: 0; border-right: 0; transform: rotate(-45deg) translate(1px, -1px); }
+.opts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.opt { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--muted); }
+.opt select { height: 36px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 0 10px; color: var(--fg); }
+.swatches { display: flex; gap: 6px; height: 36px; align-items: center; }
+.sw { width: 28px; height: 28px; border-radius: 8px; border: 2px solid transparent; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
+.sw[aria-pressed="true"] { border-color: var(--accent); }
+.queue { display: flex; flex-direction: column; gap: 10px; }
+.q { display: grid; grid-template-columns: 64px minmax(0, 1fr) 110px; gap: 12px; align-items: center; font-size: 13px; }
+.q b { font-weight: 600; }
+.q .bar { height: 6px; background: var(--surface-2); border-radius: 99px; overflow: hidden; }
+.q .bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 99px; }
+.q .st { font-size: 12px; color: var(--muted); text-align: right; }
+.q.done .bar i { background: var(--ok); }
+.q.done .st { color: var(--ok); }
+
+.toast { position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--surface); padding: 10px 16px; border-radius: 12px; font-size: 13px; box-shadow: var(--shadow-lg); z-index: 40; max-width: calc(100% - 32px); }
+
+@media (max-width: 860px) {
+  html, body { height: auto; }
+  .app { height: auto; display: flex; flex-direction: column; gap: 10px; }
+  .work { display: flex; flex-direction: column; gap: 10px; }
+  .stage { order: 1; height: 62vh; min-height: 380px; }
+  .tabs { display: flex; order: 2; }
+  .tabs.seg { width: 100%; }
+  .tabs button { flex: 1; height: 34px; }
+  .pane-layers { order: 3; } .pane-props { order: 4; }
+  .app[data-tab="tl"] .pane-layers, .app[data-tab="tl"] .pane-props,
+  .app[data-tab="layers"] .pane-props, .app[data-tab="layers"] .tl,
+  .app[data-tab="props"] .pane-layers, .app[data-tab="props"] .tl { display: none; }
+  .tl { order: 5; }
+  .tl-scroll { max-height: 300px; }
+  .hide-sm { display: none; }
+  .btn.sm-icon { padding: 0 10px; }
+  .proj small { display: none; }
+  .dock { bottom: 10px; }
+  .tool { padding: 0 9px; }
+  .tool span { display: none; }
+  #stage { padding: 56px 8px 64px; }
+  .hint { max-width: none; }
+  .stage-top { flex-direction: column; }
+  .cut, .fmts { grid-template-columns: 1fr; }
+  .levels { grid-template-columns: 1fr 1fr 1fr; }
+  .opts { grid-template-columns: 1fr 1fr; }
+  .overlay { padding: 0; place-items: end stretch; }
+  .dlg { width: 100%; max-height: 92%; border-radius: 20px 20px 0 0; }
+  .prev { aspect-ratio: 1.3 / 1; }
+  :root { --lw: 96px; }
+}
+@media (orientation: landscape) and (max-height: 540px) {
+  html, body { height: 100%; }
+  .app { height: 100%; display: grid; grid-template-columns: minmax(0, 1fr) min(44vw, 380px); grid-template-rows: auto auto minmax(0, 1fr); grid-template-areas: "top top" "stage tabs" "stage panel"; gap: 8px; padding-block: 6px; }
+  .top { grid-area: top; gap: 6px; }
+  .work { display: contents; }
+  .stage { grid-area: stage; height: auto; min-height: 0; }
+  .tabs, .tabs.seg { grid-area: tabs; display: flex; width: 100%; }
+  .tabs button { flex: 1; height: 30px; }
+  .pane-layers, .pane-props, .tl { grid-area: panel; min-height: 0; }
+  .app[data-tab="tl"] .pane-layers, .app[data-tab="tl"] .pane-props,
+  .app[data-tab="layers"] .pane-props, .app[data-tab="layers"] .tl,
+  .app[data-tab="props"] .pane-layers, .app[data-tab="props"] .tl { display: none; }
+  .tl-scroll { max-height: none; flex: 1; min-height: 0; }
+  .tl-h { padding: 6px 8px; gap: 6px; }
+  .tl-meta { display: none; }
+  .play { width: 34px; height: 34px; }
+  .pane-h { padding: 10px 12px 6px; }
+  .props { gap: 10px; }
+  .props-fields { display: flex; flex-direction: column; gap: 10px; }
+  .hint, .proj small { display: none; }
+  .mark { width: 28px; height: 28px; border-radius: 8px; }
+  .ibtn, .btn { height: 32px; } .ibtn { width: 32px; }
+  .seg button { height: 26px; }
+  #aspect.hide-sm { display: inline-flex; }
+  .tool span { display: none; }
+  .tool { height: 34px; padding: 0 9px; }
+  .dock { bottom: 8px; }
+  #stage { padding: 10px 8px 54px; }
+  .overlay { padding: 8px; place-items: center; }
+  .dlg { width: min(900px, 100%); max-height: 100%; border-radius: 16px; }
+  .cut { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); }
+  .fmts { grid-template-columns: 1fr 1fr; }
+  .opts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .prev { aspect-ratio: 1 / 1; }
+  :root { --lw: 92px; }
+}
+@media (prefers-reduced-motion: reduce) { .prev .pc { transition: none; } .prev.busy .scan { animation: none; } }
+</style>
+
+<div class="app" id="app" data-tab="tl">
+  <header class="top">
+    <div class="logo">
+      <div class="mark" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M4 15 C7 4, 10 4, 11 10 S15 16, 17 5" fill="none" stroke="var(--surface)" stroke-width="2.4" stroke-linecap="round"/><circle cx="17" cy="5" r="2" fill="var(--key)"/></svg></div>
+      <div class="proj"><b>TST Motion · <span data-i="proj"></span></b><small data-i="saved"></small></div>
+    </div>
+    <div class="seg hide-sm" role="group" aria-label="Frame" id="aspect">
+      <button type="button" data-asp="916" aria-pressed="true">9:16</button>
+      <button type="button" data-asp="169" aria-pressed="false">16:9</button>
+      <button type="button" data-asp="11" aria-pressed="false">1:1</button>
+    </div>
+    <div class="seg" role="group" aria-label="Language">
+      <button type="button" id="lang-th" aria-pressed="true">ไทย</button>
+      <button type="button" id="lang-en" aria-pressed="false">EN</button>
+    </div>
+    <button type="button" class="ibtn" id="theme" aria-label="Theme"><svg class="i" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/></svg></button>
+    <button type="button" class="btn hide-sm" id="open-import"><svg class="i" viewBox="0 0 24 24"><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3M12 15V4M7.5 8.5 12 4l4.5 4.5"/></svg><span data-i="import"></span></button>
+    <button type="button" class="btn primary sm-icon" id="open-export"><svg class="i" viewBox="0 0 24 24"><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3M12 4v11M7.5 10.5 12 15l4.5-4.5"/></svg><span data-i="export" class="hide-sm"></span></button>
+  </header>
+
+  <div class="work">
+    <aside class="card pane pane-layers" aria-label="Layers">
+      <div class="pane-h"><h2 data-i="layers"></h2><span id="layer-count"></span></div>
+      <div class="scroll"><div class="layers" id="layers"></div></div>
+    </aside>
+
+    <section class="stage">
+      <div class="stage-top">
+        <div class="hint" id="hint"></div>
+      </div>
+      <svg id="stage" viewBox="0 0 360 640" preserveAspectRatio="xMidYMid meet" aria-label="Canvas">
+        <defs>
+          <pattern id="checker" width="20" height="20" patternUnits="userSpaceOnUse">
+            <rect width="20" height="20" fill="#d6d9e1"/><rect width="10" height="10" fill="#f5f6f8"/><rect x="10" y="10" width="10" height="10" fill="#f5f6f8"/>
+          </pattern>
+        </defs>
+        <rect id="frame" x="0" y="0" width="360" height="640" rx="6" fill="url(#checker)"/>
+        <g id="world"><g id="char"></g><g id="overlay" pointer-events="none"></g></g>
+        <rect id="frame-line" x="0" y="0" width="360" height="640" rx="6"/>
+      </svg>
+      <div class="dock" role="toolbar" aria-label="Tools">
+        <button type="button" class="tool" data-tool="select" aria-pressed="true"><svg class="i" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg><span data-i="t_select"></span></button>
+        <button type="button" class="tool" data-tool="bone" aria-pressed="false"><svg class="i" viewBox="0 0 24 24"><circle cx="6" cy="18" r="2.4"/><circle cx="12.5" cy="9.5" r="2.4"/><circle cx="19" cy="5" r="1.8"/><path d="M7.4 16 11 11.6M14.6 8.2l2.8-1.9"/></svg><span data-i="t_bone"></span></button>
+        <button type="button" class="tool" data-tool="mesh" aria-pressed="false"><svg class="i" viewBox="0 0 24 24"><path d="M4 5c5 2 11 2 16 0v14c-5-2-11-2-16 0zM9.3 5.8v12.4M14.7 5.8v12.4M4 12c5 1.6 11 1.6 16 0"/></svg><span data-i="t_mesh"></span></button>
+        <button type="button" class="tool" data-tool="cut" aria-pressed="false"><svg class="i" viewBox="0 0 24 24"><circle cx="6" cy="7" r="2.8"/><circle cx="6" cy="17" r="2.8"/><path d="M8.4 8.6 20 18M8.4 15.4 20 6"/></svg><span data-i="t_cut"></span></button>
+        <i class="sep"></i>
+        <button type="button" class="bgsw alpha" data-bg="alpha" aria-pressed="true" aria-label="Transparent"></button>
+        <button type="button" class="bgsw" data-bg="green" aria-pressed="false" aria-label="Green" style="background:#00b140"></button>
+        <button type="button" class="bgsw" data-bg="white" aria-pressed="false" aria-label="White" style="background:#ffffff"></button>
+      </div>
+    </section>
+
+    <div class="seg tabs" role="tablist" id="tabs">
+      <button type="button" data-tab="tl" aria-pressed="true" data-i="tab_tl"></button>
+      <button type="button" data-tab="layers" aria-pressed="false" data-i="layers"></button>
+      <button type="button" data-tab="props" aria-pressed="false" data-i="props"></button>
+    </div>
+
+    <aside class="card pane pane-props" aria-label="Properties">
+      <div class="pane-h"><h2 data-i="props"></h2><span id="frame-no"></span></div>
+      <div class="scroll"><div class="props">
+        <div class="who"><b id="part-name"></b><span id="part-parent"></span></div>
+        <div class="knav">
+          <button type="button" class="ibtn" id="k-prev" aria-label="Previous keyframe"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button>
+          <button type="button" class="kdia" id="k-toggle"><i></i><span></span></button>
+          <button type="button" class="ibtn" id="k-next" aria-label="Next keyframe"><svg class="i" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>
+        </div>
+        <div class="grp">
+          <h3 data-i="g_tf"></h3>
+          <div class="f"><label for="f-x" data-i="p_x"></label><input type="range" id="f-x" min="-120" max="120" step="1"><output id="o-x"></output></div>
+          <div class="f"><label for="f-y" data-i="p_y"></label><input type="range" id="f-y" min="-120" max="120" step="1"><output id="o-y"></output></div>
+          <div class="f"><label for="f-rot" data-i="p_rot"></label><input type="range" id="f-rot" min="-180" max="180" step="1"><output id="o-rot"></output></div>
+          <div class="f"><label for="f-s" data-i="p_s"></label><input type="range" id="f-s" min="0.2" max="2" step="0.01"><output id="o-s"></output></div>
+          <div class="f"><label for="f-o" data-i="p_o"></label><input type="range" id="f-o" min="0" max="1" step="0.01"><output id="o-o"></output></div>
+        </div>
+        <div class="grp">
+          <h3 data-i="g_ease"></h3>
+          <div class="eases">
+            <button type="button" class="ease" data-ease="smooth" aria-pressed="true"><svg viewBox="0 0 34 22"><path d="M3 19C17 19 17 3 31 3"/></svg><span data-i="e_smooth"></span></button>
+            <button type="button" class="ease" data-ease="linear" aria-pressed="false"><svg viewBox="0 0 34 22"><path d="M3 19 31 3"/></svg><span data-i="e_linear"></span></button>
+            <button type="button" class="ease" data-ease="back" aria-pressed="false"><svg viewBox="0 0 34 22"><path d="M3 19C12 19 13 -1 22 1.5 27 3 28 4 31 4"/></svg><span data-i="e_back"></span></button>
+          </div>
+        </div>
+      </div></div>
+    </aside>
+  </div>
+
+  <section class="card tl" aria-label="Timeline">
+    <div class="tl-h">
+      <button type="button" class="ibtn" id="f-prev" aria-label="Previous frame"><svg class="i" viewBox="0 0 24 24"><path d="M6 5v14M18 6l-8 6 8 6z"/></svg></button>
+      <button type="button" class="play" id="play" aria-label="Play"><svg id="play-ico" viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z"/></svg></button>
+      <button type="button" class="ibtn" id="f-next" aria-label="Next frame"><svg class="i" viewBox="0 0 24 24"><path d="M18 5v14M6 6l8 6-8 6z"/></svg></button>
+      <div class="tc" id="tc"></div>
+      <div class="tl-meta" id="tl-meta"></div>
+    </div>
+    <div class="tl-scroll" id="tl-scroll">
+      <div class="tl-inner" id="tl-inner">
+        <div class="row ruler"><div class="lab" style="--d:0"></div><div class="trk" id="ruler"></div></div>
+        <div id="rows"></div>
+        <div class="playhead" id="playhead"></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="overlay" id="dlg-cut" hidden>
+  <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="cut-title">
+    <div class="dlg-h"><div><h3 id="cut-title" data-i="cut_title"></h3><p data-i="cut_sub"></p></div><button type="button" class="ibtn" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div class="dlg-b">
+      <div class="cut">
+        <div class="cut-left">
+          <label class="drop" for="file-in">
+            <span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3M12 15V4M7.5 8.5 12 4l4.5 4.5"/></svg></span>
+            <span><b data-i="drop"></b><small>PNG · JPG · WebP · SVG · GIF · BMP · AVIF · PSD</small></span>
+            <input type="file" id="file-in" accept="image/*,.psd" multiple hidden>
+          </label>
+          <div class="thumbs" id="thumbs"></div>
+          <div class="prev" id="prev"><svg id="cut-prev" viewBox="-130 -250 260 345" aria-label="Preview"></svg><div class="scan"></div></div>
+        </div>
+        <div class="cut-right">
+          <div><span class="lbl" data-i="lv_label"></span>
+            <div class="levels" id="levels">
+              <button type="button" class="lvl" data-lv="1" aria-pressed="false"><b data-i="lv1"></b><span data-i="lv1_s"></span></button>
+              <button type="button" class="lvl" data-lv="2" aria-pressed="false"><b data-i="lv2"></b><span data-i="lv2_s"></span></button>
+              <button type="button" class="lvl" data-lv="3" aria-pressed="true"><b data-i="lv3"></b><span data-i="lv3_s"></span></button>
+            </div>
+          </div>
+          <div><span class="lbl" data-i="cat_label"></span>
+            <div class="chips" id="cats">
+              <button type="button" class="chip" data-cat="hair" aria-pressed="true"><svg class="i" viewBox="0 0 24 24"><path d="M5 14c0-6 3-10 7-10s7 4 7 10M8 6c1 4 3 6 7 7M12 4c-1 3-1 5 0 8"/></svg><span data-i="c_hair"></span></button>
+              <button type="button" class="chip" data-cat="face" aria-pressed="true"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M9 10v1M15 10v1M9 15c2 1.5 4 1.5 6 0"/></svg><span data-i="c_face"></span></button>
+              <button type="button" class="chip" data-cat="clothes" aria-pressed="true"><svg class="i" viewBox="0 0 24 24"><path d="M8 4 4 7l2 4 2-1v10h8V10l2 1 2-4-4-3c-1 2-2.5 3-4 3S9 6 8 4z"/></svg><span data-i="c_clothes"></span></button>
+              <button type="button" class="chip" data-cat="items" aria-pressed="true"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l2.4 5 5.6.6-4.2 3.8 1.2 5.6L12 15.2 7 18l1.2-5.6L4 8.6 9.6 8z"/></svg><span data-i="c_items"></span></button>
+              <button type="button" class="chip" data-cat="hands" aria-pressed="true"><svg class="i" viewBox="0 0 24 24"><path d="M8 13V6a1.5 1.5 0 0 1 3 0v5M11 11V4.5a1.5 1.5 0 0 1 3 0V11M14 11V6a1.5 1.5 0 0 1 3 0v7c0 4-2.5 7-6 7-2.5 0-4-1.5-5.5-4L4 13c-.7-1.3 1-2.5 2-1.4L8 14"/></svg><span data-i="c_hands"></span></button>
+            </div>
+          </div>
+          <div><span class="lbl"><span data-i="res_label"></span><span class="count" id="res-count"></span></span>
+            <div id="tiles"></div>
+          </div>
+          <div class="trust"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg><span data-ih="trust"></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="dlg-f">
+      <span class="grow" data-i="manual"></span>
+      <button type="button" class="btn" id="run-cut"><svg class="i" viewBox="0 0 24 24"><circle cx="6" cy="7" r="2.8"/><circle cx="6" cy="17" r="2.8"/><path d="M8.4 8.6 20 18M8.4 15.4 20 6"/></svg><span data-i="run_cut"></span></button>
+      <button type="button" class="btn primary" id="use-cut" disabled data-i="use_cut"></button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="dlg-export" hidden>
+  <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="ex-title" style="width:min(720px,100%)">
+    <div class="dlg-h"><div><h3 id="ex-title" data-i="ex_title"></h3><p data-i="ex_sub"></p></div><button type="button" class="ibtn" data-close aria-label="Close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div class="dlg-b">
+      <div class="fmts" id="fmts">
+        <button type="button" class="fmt" data-fmt="MP4" aria-pressed="true"><span class="pv" style="background:#00b140">MP4</span><span><b>MP4</b><span data-i="f_mp4"></span></span><i class="ck"></i></button>
+        <button type="button" class="fmt" data-fmt="WebM" aria-pressed="true"><span class="pv alpha">WebM</span><span><b>WebM · <span data-i="clear"></span></b><span data-i="f_webm"></span></span><i class="ck"></i></button>
+        <button type="button" class="fmt" data-fmt="MOV" aria-pressed="false"><span class="pv alpha">MOV</span><span><b>MOV · <span data-i="clear"></span></b><span data-i="f_mov"></span></span><i class="ck"></i></button>
+        <button type="button" class="fmt" data-fmt="GIF" aria-pressed="false"><span class="pv alpha">GIF</span><span><b>GIF · <span data-i="clear"></span></b><span data-i="f_gif"></span></span><i class="ck"></i></button>
+      </div>
+      <div class="opts">
+        <label class="opt"><span data-i="o_size"></span><select id="ex-asp"><option value="916">9:16 TikTok / Reels</option><option value="169">16:9 YouTube</option><option value="11">1:1</option></select></label>
+        <label class="opt"><span data-i="o_res"></span><select id="ex-res"><option>720p</option><option selected>1080p</option><option>2K</option><option>4K</option></select></label>
+        <label class="opt"><span data-i="o_fps"></span><select id="ex-fps"><option>24</option><option selected>30</option><option>60</option></select></label>
+        <div class="opt"><span data-i="o_bg"></span>
+          <div class="swatches" id="swatches">
+            <button type="button" class="sw" style="background:#00b140" aria-label="Green" aria-pressed="true"></button>
+            <button type="button" class="sw" style="background:#0047bb" aria-label="Blue" aria-pressed="false"></button>
+            <button type="button" class="sw" style="background:#ffffff" aria-label="White" aria-pressed="false"></button>
+            <button type="button" class="sw" style="background:#000000" aria-label="Black" aria-pressed="false"></button>
+          </div>
+        </div>
+      </div>
+      <div class="queue" id="queue" hidden></div>
+    </div>
+    <div class="dlg-f">
+      <span class="grow" data-i="ex_note"></span>
+      <button type="button" class="btn primary" id="render"></button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+const T = {
+  th: {
+    proj: "งานใหม่ 1", saved: "บันทึกในเครื่องแล้ว", import: "นำเข้ารูป", export: "ส่งออก",
+    layers: "เลเยอร์", props: "คุณสมบัติ", tab_tl: "ไทม์ไลน์", pieces: n => `${n} ชิ้น`,
+    t_select: "หมุน", t_bone: "กระดูก", t_mesh: "ดัดรูป", t_cut: "ตัดชิ้น",
+    h_select: "แตะชิ้นส่วนเพื่อเลือก แล้วลากเพื่อหมุนรอบข้อต่อ ระบบใส่คีย์เฟรมให้เอง",
+    h_bone: "เส้นสีชมพูคือกระดูก หมุนชิ้นแม่ ชิ้นลูกหมุนตาม เช่น หมุนมือ ไม้กายสิทธิ์ก็หมุนด้วย",
+    h_mesh: "ตาข่ายนี้ใช้ดัดชิ้นส่วนให้โค้งงอ ในต้นแบบนี้ยังลากจุดไม่ได้",
+    under: p => `อยู่ใต้ ${p}`, top: "ชิ้นบนสุด", frame: f => `เฟรม ${f}`,
+    key_on: "มีคีย์เฟรม", key_off: "ใส่คีย์เฟรม",
+    g_tf: "การจัดวาง", g_ease: "การเคลื่อนที่ไปคีย์ถัดไป",
+    p_x: "ซ้าย-ขวา", p_y: "ขึ้น-ลง", p_rot: "หมุน", p_s: "ขนาด", p_o: "ความทึบ",
+    e_smooth: "นุ่มนวล", e_linear: "คงที่", e_back: "เด้งกลับ",
+    tl_meta: n => `${n} ชิ้น · 3 วินาที · 30 fps`,
+    body: "ลำตัว", head: "หัว", hairFront: "ผมหน้าม้า", hairBack: "ผมด้านหลัง", ponytail: "หางม้า", eyes: "ตา", mouth: "ปาก",
+    scarf: "ผ้าพันคอ", armL: "แขนซ้าย", handL: "มือซ้าย", armR: "แขนขวา", handR: "มือขวา", wand: "ไม้กายสิทธิ์", legL: "ขาซ้าย", legR: "ขาขวา",
+    cut_title: "ตัดชิ้นส่วนอัตโนมัติ", cut_sub: "แยกรูปวาดออกเป็นชิ้นพร้อมจุดหมุนที่ข้อต่อ ทั้งร่างกาย เส้นผม ใบหน้า เสื้อผ้า และสิ่งของที่ถือ",
+    drop: "ลากรูปมาวาง หรือแตะเพื่อเลือก ได้ทีละหลายรูป",
+    lv_label: "ความละเอียดในการแยก", lv1: "หยาบ", lv1_s: "หัว ตัว แขน ขา", lv2: "ปกติ", lv2_s: "เพิ่มมือ ผม ของ", lv3: "ละเอียด", lv3_s: "ทุกชิ้นถึงตาและปาก",
+    cat_label: "แยกอะไรบ้าง", c_hair: "เส้นผม", c_face: "ใบหน้า", c_clothes: "เสื้อผ้า", c_items: "สิ่งของ", c_hands: "มือ",
+    res_label: "ผลลัพธ์", empty: "กด \"เริ่มตัด\" เพื่อดูชิ้นส่วนที่ได้ ปรับตัวเลือกด้านบนแล้วผลจะเปลี่ยนทันที",
+    merged: n => `รวม ${n} ชิ้น`,
+    trust: "<b>AI ทำงานในเครื่องคุณ</b> รูปไม่ถูกส่งไปไหน AI ช่วยแค่ตัดชิ้น การขยับทั้งหมดคุณทำเอง",
+    manual: "ตัดไม่ตรงใจ? แตะชิ้นเพื่อแก้ หรือตัดเองด้วยบ่วงบาศ แปรง ยางลบ",
+    run_cut: "เริ่มตัด", re_cut: "ตัดใหม่", use_cut: "ใช้ชิ้นส่วนนี้", used: n => `เพิ่ม ${n} ชิ้นลงเลเยอร์แล้ว (สาธิต)`,
+    files: n => `เลือกแล้ว ${n} รูป ต้นแบบนี้ใช้ตัวละครสาธิตแทน`,
+    ex_title: "ส่งออกงาน", ex_sub: "ติ๊กได้หลายแบบ แล้วเรนเดอร์ทีเดียวทั้งหมด",
+    clear: "พื้นใส", f_mp4: "เปิดได้ทุกแอป พื้นหลังเป็นสีที่เลือกด้านล่าง", f_webm: "ใช้กับ CapCut, OBS และหน้าเว็บ",
+    f_mov: "สำหรับ Premiere, After Effects, DaVinci", f_gif: "ขอบไม่เนียน แต่ไฟล์เล็ก",
+    o_size: "ขนาดจอ", o_res: "ความละเอียด", o_fps: "เฟรมต่อวินาที", o_bg: "สีพื้น MP4",
+    ex_note: "ต้นแบบ: ยังไม่สร้างไฟล์จริง",
+    render: n => n ? `เรนเดอร์ ${n} ไฟล์` : "เลือกอย่างน้อย 1 แบบ",
+    q_wait: "รอคิว", q_run: "กำลังเรนเดอร์", q_done: "เสร็จ"
+  },
+  en: {
+    proj: "Untitled 1", saved: "Saved on this device", import: "Import images", export: "Export",
+    layers: "Layers", props: "Properties", tab_tl: "Timeline", pieces: n => `${n} parts`,
+    t_select: "Rotate", t_bone: "Bones", t_mesh: "Warp", t_cut: "Cut",
+    h_select: "Tap a part to select it, then drag to rotate it around its joint. Keyframes are added for you.",
+    h_bone: "Pink shapes are bones. Rotate a parent and its children follow: turn the hand and the wand turns too.",
+    h_mesh: "This mesh bends the part. Dragging the points is not in the prototype yet.",
+    under: p => `Child of ${p}`, top: "Top-level part", frame: f => `Frame ${f}`,
+    key_on: "Keyframe set", key_off: "Add keyframe",
+    g_tf: "Transform", g_ease: "Motion to the next key",
+    p_x: "Left-right", p_y: "Up-down", p_rot: "Rotate", p_s: "Size", p_o: "Opacity",
+    e_smooth: "Smooth", e_linear: "Linear", e_back: "Overshoot",
+    tl_meta: n => `${n} parts · 3 s · 30 fps`,
+    body: "Body", head: "Head", hairFront: "Bangs", hairBack: "Back hair", ponytail: "Ponytail", eyes: "Eyes", mouth: "Mouth",
+    scarf: "Scarf", armL: "Left arm", handL: "Left hand", armR: "Right arm", handR: "Right hand", wand: "Star wand", legL: "Left leg", legR: "Right leg",
+    cut_title: "Auto cut", cut_sub: "Splits a drawing into parts with pivots at the joints: body, hair, face, clothes and held items.",
+    drop: "Drop images or tap to choose, several at once",
+    lv_label: "How finely to split", lv1: "Coarse", lv1_s: "Head, body, arms, legs", lv2: "Normal", lv2_s: "Adds hands, hair, items", lv3: "Fine", lv3_s: "Every part down to eyes",
+    cat_label: "What to split out", c_hair: "Hair", c_face: "Face", c_clothes: "Clothes", c_items: "Items", c_hands: "Hands",
+    res_label: "Result", empty: "Press \"Start cutting\" to see the parts. Change the options above and the result updates at once.",
+    merged: n => `${n} merged`,
+    trust: "<b>The AI runs on your device.</b> Images never leave it. It only cuts parts; you do all the animating.",
+    manual: "Not quite right? Tap a part to fix it, or cut by hand with lasso, brush and eraser.",
+    run_cut: "Start cutting", re_cut: "Cut again", use_cut: "Use these parts", used: n => `Added ${n} parts to layers (demo)`,
+    files: n => `${n} image${n > 1 ? "s" : ""} chosen. The prototype uses the demo character.`,
+    ex_title: "Export", ex_sub: "Tick as many formats as you like and render them all at once.",
+    clear: "clear", f_mp4: "Plays everywhere. Background uses the colour picked below.", f_webm: "For CapCut, OBS and the web.",
+    f_mov: "For Premiere, After Effects, DaVinci.", f_gif: "Hard edges, small file.",
+    o_size: "Frame", o_res: "Resolution", o_fps: "Frames per second", o_bg: "MP4 background",
+    ex_note: "Prototype: no real files yet",
+    render: n => n ? `Render ${n} file${n > 1 ? "s" : ""}` : "Pick at least one",
+    q_wait: "Waiting", q_run: "Rendering", q_done: "Done"
+  }
+};
+let lang = "th";
+try { const s = localStorage.getItem("tstm-lang"); if (s === "th" || s === "en") lang = s; else if (!(navigator.language || "").startsWith("th")) lang = "en"; } catch (e) {}
+const t = k => T[lang][k];
+const $ = id => document.getElementById(id);
+
+const FPS = 30, DUR = 3, ink = "#2b2233";
+const PARTS = {
+  body:      { parent: null,       pivot: [0, 0],      tip: [0, -92],   cat: "body",    lv: 1 },
+  legL:      { parent: null,       pivot: [-19, 2],    tip: [-22, 66],  cat: "body",    lv: 1 },
+  legR:      { parent: null,       pivot: [19, 2],     tip: [22, 66],   cat: "body",    lv: 1 },
+  head:      { parent: "body",     pivot: [0, -96],    tip: [0, -196],  cat: "body",    lv: 1 },
+  hairBack:  { parent: "head",     pivot: [0, -170],   tip: [0, -116],  cat: "hair",    lv: 2, merge: "head" },
+  ponytail:  { parent: "hairBack", pivot: [50, -192],  tip: [94, -112], cat: "hair",    lv: 3, merge: "hairBack" },
+  hairFront: { parent: "head",     pivot: [0, -206],   tip: [0, -164],  cat: "hair",    lv: 2, merge: "head" },
+  eyes:      { parent: "head",     pivot: [0, -142],                    cat: "face",    lv: 3, merge: "head" },
+  mouth:     { parent: "head",     pivot: [0, -116],                    cat: "face",    lv: 3, merge: "head" },
+  scarf:     { parent: "body",     pivot: [16, -92],   tip: [27, -46],  cat: "clothes", lv: 2, merge: "body" },
+  armL:      { parent: "body",     pivot: [-44, -82],  tip: [-44, -30], cat: "body",    lv: 1 },
+  handL:     { parent: "armL",     pivot: [-44, -28],  tip: [-44, -10], cat: "hands",   lv: 2, merge: "armL" },
+  armR:      { parent: "body",     pivot: [44, -82],   tip: [44, -30],  cat: "body",    lv: 1 },
+  handR:     { parent: "armR",     pivot: [44, -28],   tip: [44, -10],  cat: "hands",   lv: 2, merge: "armR" },
+  wand:      { parent: "handR",    pivot: [44, -20],   tip: [80, -66],  cat: "items",   lv: 2, merge: "handR" }
+};
+const IDS = Object.keys(PARTS);
+const DRAW = ["ponytail", "hairBack", "legL", "legR", "armL", "handL", "body", "head", "eyes", "mouth", "scarf", "hairFront", "armR", "wand", "handR"];
+const TREE = ["body", "head", "hairFront", "eyes", "mouth", "hairBack", "ponytail", "scarf", "armL", "handL", "armR", "handR", "wand", "legL", "legR"];
+const depth = id => { let d = 0, p = PARTS[id].parent; while (p) { d++; p = PARTS[p].parent; } return d; };
+
+const K = (tt, o) => Object.assign({ t: tt, x: 0, y: 0, rot: 0, s: 1, o: 1, ease: "smooth" }, o || {});
+const keys = {
+  body: [K(0), K(1.5, { y: -6, rot: 3 }), K(3)],
+  legL: [K(0), K(1.5, { rot: -4 }), K(3)],
+  legR: [K(0), K(1.5, { rot: 4 }), K(3)],
+  head: [K(0, { rot: -6 }), K(.75, { rot: 6 }), K(1.5, { rot: -6 }), K(2.25, { rot: 6 }), K(3, { rot: -6 })],
+  hairBack: [K(0, { rot: 2 }), K(.9, { rot: -3 }), K(1.65, { rot: 3 }), K(2.4, { rot: -3 }), K(3, { rot: 2 })],
+  ponytail: [K(0), K(.6, { rot: 16 }), K(1.35, { rot: -10 }), K(2.1, { rot: 16 }), K(3)],
+  hairFront: [K(0), K(1.5, { rot: 3 }), K(3)],
+  eyes: [K(0), K(1.1, { x: 4 }), K(1.9, { x: 4 }), K(2.4), K(3)],
+  mouth: [K(0), K(1.5, { s: 1.25 }), K(3)],
+  scarf: [K(0), K(.75, { rot: 12 }), K(1.5, { rot: -6 }), K(2.25, { rot: 12 }), K(3)],
+  armL: [K(0, { rot: 10 }), K(1.5, { rot: 28 }), K(3, { rot: 10 })],
+  handL: [K(0), K(1.5, { rot: -15 }), K(3)],
+  armR: [K(0, { rot: -20 }), K(.5, { rot: -150, ease: "back" }), K(1, { rot: -115 }), K(1.5, { rot: -150 }), K(2, { rot: -115 }), K(2.5, { rot: -150 }), K(3, { rot: -20 })],
+  handR: [K(0), K(.75, { rot: -25 }), K(1.25, { rot: 15 }), K(1.75, { rot: -25 }), K(2.25, { rot: 15 }), K(3)],
+  wand: [K(0)]
+};
+
+function star(cx, cy, R, r) { const p = []; for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, q = i % 2 ? r : R; p.push((cx + q * Math.cos(a)).toFixed(1) + "," + (cy + q * Math.sin(a)).toFixed(1)); } return p.join(" "); }
+function shapes(id) {
+  const st = `stroke="${ink}" stroke-width="3" stroke-linejoin="round"`;
+  const S = {
+    legL: `<rect class="shape" x="-30" y="-4" width="22" height="68" rx="10" fill="#3d4e8a" ${st}/><ellipse class="shape" cx="-24" cy="68" rx="17" ry="9" fill="#2b2233" ${st}/>`,
+    legR: `<rect class="shape" x="8" y="-4" width="22" height="68" rx="10" fill="#3d4e8a" ${st}/><ellipse class="shape" cx="24" cy="68" rx="17" ry="9" fill="#2b2233" ${st}/>`,
+    body: `<rect class="shape" x="-44" y="-98" width="88" height="106" rx="30" fill="#f08a5d" ${st}/><circle cx="0" cy="-52" r="4" fill="${ink}"/><circle cx="0" cy="-32" r="4" fill="${ink}"/>`,
+    head: `<circle class="shape" cx="0" cy="-150" r="56" fill="#ffd9b8" ${st}/><circle cx="-36" cy="-124" r="7.5" fill="#ff9fb0" opacity=".75"/><circle cx="36" cy="-124" r="7.5" fill="#ff9fb0" opacity=".75"/>`,
+    hairBack: `<path class="shape" d="M-63 -150 Q-68 -224 0 -222 Q68 -224 63 -150 L66 -110 Q44 -98 32 -118 L-32 -118 Q-44 -98 -66 -110Z" fill="#3a2a4d" ${st}/>`,
+    ponytail: `<path class="shape" d="M46 -202 Q98 -216 106 -168 Q112 -128 86 -100 Q96 -140 80 -164 Q70 -182 44 -186Z" fill="#3a2a4d" ${st}/><circle class="shape" cx="50" cy="-193" r="8" fill="#ff7eb0" ${st}/>`,
+    hairFront: `<path class="shape" d="M-57 -146 Q-64 -214 0 -212 Q64 -214 57 -146 Q46 -176 10 -178 Q16 -166 4 -160 Q-2 -176 -22 -176 Q-46 -174 -57 -146Z" fill="#3a2a4d" ${st}/>`,
+    eyes: `<ellipse class="shape" cx="-20" cy="-142" rx="6" ry="9" fill="${ink}" stroke="${ink}" stroke-width="1"/><ellipse class="shape" cx="20" cy="-142" rx="6" ry="9" fill="${ink}" stroke="${ink}" stroke-width="1"/><circle cx="-18" cy="-145" r="2.2" fill="#fff"/><circle cx="22" cy="-145" r="2.2" fill="#fff"/>`,
+    mouth: `<path class="shape" d="M-11 -121 Q0 -105 11 -121Z" fill="#c2405a" ${st}/>`,
+    scarf: `<path class="shape" d="M-36 -101 Q0 -86 36 -101 L38 -87 Q0 -70 -38 -87Z" fill="#2fb5a5" ${st}/><path class="shape" d="M12 -90 L32 -92 L31 -44 L24 -50 L17 -42Z" fill="#2fb5a5" ${st}/>`,
+    armL: `<rect class="shape" x="-54" y="-90" width="20" height="66" rx="10" fill="#d9704a" ${st}/>`,
+    handL: `<circle class="shape" cx="-44" cy="-20" r="11" fill="#ffd9b8" ${st}/>`,
+    armR: `<rect class="shape" x="34" y="-90" width="20" height="66" rx="10" fill="#d9704a" ${st}/>`,
+    handR: `<circle class="shape" cx="44" cy="-20" r="11" fill="#ffd9b8" ${st}/>`,
+    wand: `<path d="M40 -14 L76 -60" stroke="${ink}" stroke-width="8" stroke-linecap="round"/><path d="M40 -14 L76 -60" stroke="#a8754d" stroke-width="4" stroke-linecap="round"/><polygon class="shape" points="${star(82, -68, 17, 7.5)}" fill="#f6c343" ${st}/>`
+  };
+  return S[id];
+}
+$("char").innerHTML = DRAW.map(id => `<g class="part" id="p-${id}" data-part="${id}">${shapes(id)}</g>`).join("");
+
+const ease = {
+  smooth: u => u < .5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2,
+  linear: u => u,
+  back: u => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(u - 1, 3) + c1 * Math.pow(u - 1, 2); }
+};
+const PROPS = ["x", "y", "rot", "s", "o"];
+function sample(id, tt) {
+  const ks = keys[id];
+  if (tt <= ks[0].t) return ks[0];
+  const last = ks[ks.length - 1];
+  if (tt >= last.t) return last;
+  let i = 0; while (ks[i + 1].t <= tt) i++;
+  const a = ks[i], b = ks[i + 1], u = ease[a.ease]((tt - a.t) / (b.t - a.t));
+  const r = {}; PROPS.forEach(p => r[p] = a[p] + (b[p] - a[p]) * u); return r;
+}
+
+let time = 0.5, playing = false, sel = "handR", tool = "select", bg = "alpha";
+const hiddenParts = new Set();
+const W = {}, OP = {};
+const ASP = { "916": { w: 360, h: 640, s: 1.45, cx: 180, cy: 420 }, "169": { w: 640, h: 360, s: 0.98, cx: 320, cy: 262 }, "11": { w: 480, h: 480, s: 1.2, cx: 240, cy: 345 } };
+const svg = $("stage"), world = $("world");
+
+function computeWorld() {
+  IDS.forEach(id => {
+    const v = sample(id, time), P = PARTS[id], [px, py] = P.pivot;
+    const m = new DOMMatrix().translate(v.x, v.y).translate(px, py).rotate(v.rot).scale(v.s).translate(-px, -py);
+    W[id] = P.parent ? W[P.parent].multiply(m) : m;
+    OP[id] = (P.parent ? OP[P.parent] : 1) * v.o;
+  });
+}
+function applyPose() {
+  computeWorld();
+  IDS.forEach(id => {
+    const m = W[id], el = $("p-" + id);
+    el.setAttribute("transform", `matrix(${m.a} ${m.b} ${m.c} ${m.d} ${m.e} ${m.f})`);
+    el.setAttribute("opacity", OP[id]);
+    el.style.display = hiddenParts.has(id) ? "none" : "";
+  });
+  drawOverlay();
+}
+const wp = (id, x, y) => W[id].transformPoint(new DOMPoint(x, y));
+function drawOverlay() {
+  let h = "";
+  if (tool === "bone") {
+    IDS.forEach(id => {
+      const P = PARTS[id]; if (!P.tip) return;
+      const a = wp(id, ...P.pivot), b = wp(id, ...P.tip), dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1, nx = -dy / L * 6, ny = dx / L * 6, mx = a.x + dx * .22, my = a.y + dy * .22;
+      h += `<path d="M${a.x} ${a.y}L${mx + nx} ${my + ny}L${b.x} ${b.y}L${mx - nx} ${my - ny}Z" fill="#ff5f9e" fill-opacity="${id === sel ? .95 : .5}" stroke="#7a1d45" stroke-width="1.3"/><circle cx="${a.x}" cy="${a.y}" r="5" fill="#fff" stroke="#7a1d45" stroke-width="2"/>`;
+    });
+  } else if (tool === "mesh") {
+    const b = $("p-" + sel).getBBox(), x0 = b.x - 6, y0 = b.y - 6, x1 = b.x + b.width + 6, y1 = b.y + b.height + 6, N = 4;
+    const P = (i, j) => wp(sel, x0 + (x1 - x0) * i / N, y0 + (y1 - y0) * j / N);
+    for (let i = 0; i <= N; i++) { let r = "", c = ""; for (let j = 0; j <= N; j++) { const p = P(j, i), q = P(i, j); r += (j ? "L" : "M") + p.x + " " + p.y; c += (j ? "L" : "M") + q.x + " " + q.y; } h += `<path d="${r}" fill="none" style="stroke:var(--accent)" stroke-width="1.2"/><path d="${c}" fill="none" style="stroke:var(--accent)" stroke-width="1.2"/>`; }
+    for (let i = 0; i <= N; i++) for (let j = 0; j <= N; j++) { const p = P(i, j); h += `<circle cx="${p.x}" cy="${p.y}" r="3.6" style="fill:var(--surface);stroke:var(--accent)" stroke-width="1.6"/>`; }
+  }
+  $("overlay").innerHTML = h;
+}
+
+function setAspect(a) {
+  const A = ASP[a];
+  svg.setAttribute("viewBox", `0 0 ${A.w} ${A.h}`);
+  ["frame", "frame-line"].forEach(i => { $(i).setAttribute("width", A.w); $(i).setAttribute("height", A.h); });
+  world.setAttribute("transform", `translate(${A.cx} ${A.cy}) scale(${A.s})`);
+  document.querySelectorAll("#aspect button").forEach(b => b.setAttribute("aria-pressed", b.dataset.asp === a));
+  $("ex-asp").value = a;
+}
+function setBg(m) {
+  bg = m; $("frame").setAttribute("fill", m === "alpha" ? "url(#checker)" : m === "green" ? "#00b140" : "#ffffff");
+  document.querySelectorAll(".bgsw").forEach(b => b.setAttribute("aria-pressed", b.dataset.bg === m));
+}
+
+function thumbSvg(ids, pad) {
+  const els = ids.map(id => $("p-" + id)); let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  els.forEach(e => { const b = e.getBBox(); x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.width); y1 = Math.max(y1, b.y + b.height); });
+  pad = pad || 6;
+  return `<svg viewBox="${x0 - pad} ${y0 - pad} ${x1 - x0 + pad * 2} ${y1 - y0 + pad * 2}" preserveAspectRatio="xMidYMid meet">${DRAW.filter(d => ids.includes(d)).map(shapes).join("")}</svg>`;
+}
+const THUMBS = {};
+function buildLayers() {
+  $("layers").innerHTML = TREE.map(id => `<div class="lyr${id === sel ? " sel" : ""}${hiddenParts.has(id) ? " off" : ""}" data-l="${id}" style="--d:${depth(id)}"><span class="th">${THUMBS[id]}</span><span class="nm">${t(id)}</span>${PARTS[id].cat === "items" ? `<span class="tag">${t("c_items")}</span>` : ""}<button type="button" class="eye" data-eye="${id}" aria-label="Show or hide ${t(id)}"><svg class="i" viewBox="0 0 24 24" style="width:16px;height:16px">${hiddenParts.has(id) ? '<path d="M3 3l18 18M10.6 6.1A9.7 9.7 0 0 1 12 6c5 0 8.5 4.2 9.5 6-.5.9-1.6 2.5-3.2 3.8M6.3 7.6C4.4 8.9 3.1 10.8 2.5 12c1 1.8 4.5 6 9.5 6 1.5 0 2.9-.4 4.1-1"/>' : '<path d="M2.5 12C3.5 10.2 7 6 12 6s8.5 4.2 9.5 6c-1 1.8-4.5 6-9.5 6s-8.5-4.2-9.5-6z"/><circle cx="12" cy="12" r="2.8"/>'}</svg></button></div>`).join("");
+  $("layer-count").textContent = t("pieces")(IDS.length);
+}
+$("layers").addEventListener("click", e => {
+  const eye = e.target.closest("[data-eye]");
+  if (eye) { const id = eye.dataset.eye; hiddenParts.has(id) ? hiddenParts.delete(id) : hiddenParts.add(id); render(true); return; }
+  const r = e.target.closest("[data-l]"); if (r) { sel = r.dataset.l; render(true); }
+});
+
+function buildTimeline() {
+  let r = "";
+  for (let s = 0; s <= DUR * 2; s++) { const tt = s / 2; r += `<span class="tick" style="left:${tt / DUR * 100}%">${tt % 1 ? "" : tt + "s"}</span>`; }
+  $("ruler").innerHTML = r;
+  $("rows").innerHTML = TREE.map(id => `<div class="row${id === sel ? " sel" : ""}" data-row="${id}"><div class="lab" style="--d:${depth(id)}">${t(id)}</div><div class="trk">${keys[id].map((k, i) => `<button type="button" class="kf${Math.abs(k.t - time) < 1e-3 ? " now" : ""}" data-kid="${id}" data-ki="${i}" style="left:${k.t / DUR * 100}%" aria-label="${t(id)} ${k.t.toFixed(2)}s"></button>`).join("")}</div></div>`).join("");
+  $("tl-meta").textContent = t("tl_meta")(IDS.length);
+}
+const keyAt = id => keys[id].findIndex(k => Math.abs(k.t - time) < 1e-3);
+function refreshProps() {
+  $("part-name").textContent = t(sel);
+  const par = PARTS[sel].parent; $("part-parent").textContent = par ? t("under")(t(par)) : t("top");
+  const v = sample(sel, time);
+  PROPS.forEach(p => { $("f-" + p).value = v[p]; $("o-" + p).textContent = p === "s" || p === "o" ? Math.round(v[p] * 100) + "%" : p === "rot" ? Math.round(v[p]) + "°" : Math.round(v[p]); });
+  const ki = keyAt(sel), kt = $("k-toggle");
+  kt.classList.toggle("on", ki >= 0); kt.querySelector("span").textContent = t(ki >= 0 ? "key_on" : "key_off");
+  const en = ki >= 0 ? keys[sel][ki].ease : "smooth";
+  document.querySelectorAll(".ease").forEach(b => b.setAttribute("aria-pressed", b.dataset.ease === en));
+  $("k-prev").disabled = !keys[sel].some(k => k.t < time - 1e-3);
+  $("k-next").disabled = !keys[sel].some(k => k.t > time + 1e-3);
+  document.querySelectorAll("#stage .part").forEach(g => g.classList.toggle("sel", g.dataset.part === sel));
+}
+function refreshTime() {
+  const f = Math.round(time * FPS), ss = Math.floor(time + 1e-6), ff = f - ss * FPS;
+  $("tc").innerHTML = `00:0${ss}:${String(ff).padStart(2, "0")} <span>/ 00:03:00</span>`;
+  $("frame-no").textContent = t("frame")(f);
+  $("tl-inner").style.setProperty("--frac", time / DUR);
+}
+function render(full) {
+  applyPose(); refreshTime(); refreshProps();
+  if (full) { buildTimeline(); buildLayers(); }
+  else document.querySelectorAll(".kf").forEach(k => k.classList.toggle("now", Math.abs(keys[k.dataset.kid][+k.dataset.ki].t - time) < 1e-3));
+}
+
+function setKey(id, patch) {
+  pause();
+  time = Math.round(time * FPS) / FPS;
+  let ki = keyAt(id);
+  if (ki < 0) { const v = sample(id, time), nk = Object.assign({ t: time, ease: "smooth" }, ...PROPS.map(p => ({ [p]: v[p] }))); keys[id].push(nk); keys[id].sort((a, b) => a.t - b.t); ki = keys[id].indexOf(nk); }
+  Object.assign(keys[id][ki], patch);
+  render(true);
+}
+
+let raf = 0, last = 0;
+function loop(ts) { if (!playing) return; if (last) time = (time + (ts - last) / 1000) % DUR; last = ts; render(false); raf = requestAnimationFrame(loop); }
+function play() { playing = true; last = 0; $("play-ico").innerHTML = '<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>'; $("play").setAttribute("aria-label", "Pause"); raf = requestAnimationFrame(loop); }
+function pause() { if (!playing) return; playing = false; cancelAnimationFrame(raf); $("play-ico").innerHTML = '<path d="M7 4.5v15l13-7.5z"/>'; $("play").setAttribute("aria-label", "Play"); render(true); }
+$("play").onclick = () => playing ? pause() : play();
+const stepTo = tt => { pause(); time = Math.min(DUR, Math.max(0, Math.round(tt * FPS) / FPS)); render(true); };
+$("f-prev").onclick = () => stepTo(time - 1 / FPS);
+$("f-next").onclick = () => stepTo(time + 1 / FPS);
+$("k-prev").onclick = () => { const k = keys[sel].filter(k => k.t < time - 1e-3).pop(); if (k) stepTo(k.t); };
+$("k-next").onclick = () => { const k = keys[sel].find(k => k.t > time + 1e-3); if (k) stepTo(k.t); };
+$("k-toggle").onclick = () => { const ki = keyAt(sel); if (ki >= 0) { if (keys[sel].length > 1) { keys[sel].splice(ki, 1); render(true); } } else setKey(sel, {}); };
+
+const inner = $("tl-inner");
+function scrub(e) {
+  const r = inner.getBoundingClientRect(), lw = parseFloat(getComputedStyle(inner).getPropertyValue("--lw"));
+  const fr = Math.min(1, Math.max(0, (e.clientX - r.left - lw) / (r.width - lw)));
+  time = Math.round(fr * DUR * FPS) / FPS; render(false);
+}
+inner.addEventListener("pointerdown", e => {
+  const kf = e.target.closest(".kf"), lab = e.target.closest(".lab"), row = e.target.closest(".row");
+  if (kf) { pause(); sel = kf.dataset.kid; time = keys[sel][+kf.dataset.ki].t; render(true); return; }
+  if (lab) { if (row && row.dataset.row) { sel = row.dataset.row; render(true); } return; }
+  pause(); inner.setPointerCapture(e.pointerId); scrub(e);
+  const mv = ev => scrub(ev), up = () => { inner.removeEventListener("pointermove", mv); inner.removeEventListener("pointerup", up); render(true); };
+  inner.addEventListener("pointermove", mv); inner.addEventListener("pointerup", up);
+});
+
+const svgPoint = e => new DOMPoint(e.clientX, e.clientY).matrixTransform(world.getScreenCTM().inverse());
+svg.addEventListener("pointerdown", e => {
+  const g = e.target.closest(".part"); if (!g) return;
+  e.preventDefault(); sel = g.dataset.part; render(true);
+  const piv = wp(sel, ...PARTS[sel].pivot), p0 = svgPoint(e), a0 = Math.atan2(p0.y - piv.y, p0.x - piv.x), r0 = sample(sel, time).rot;
+  svg.setPointerCapture(e.pointerId);
+  const mv = ev => { const p = svgPoint(ev), d = (Math.atan2(p.y - piv.y, p.x - piv.x) - a0) * 180 / Math.PI; let r = r0 + d; while (r > 180) r -= 360; while (r < -180) r += 360; setKey(sel, { rot: Math.round(r) }); };
+  const up = () => { svg.removeEventListener("pointermove", mv); svg.removeEventListener("pointerup", up); };
+  svg.addEventListener("pointermove", mv); svg.addEventListener("pointerup", up);
+});
+
+PROPS.forEach(p => $("f-" + p).addEventListener("input", e => setKey(sel, { [p]: parseFloat(e.target.value) })));
+document.querySelectorAll(".ease").forEach(b => b.onclick = () => setKey(sel, { ease: b.dataset.ease }));
+document.querySelectorAll(".tool").forEach(b => b.onclick = () => {
+  if (b.dataset.tool === "cut") { openDlg("dlg-cut"); return; }
+  tool = b.dataset.tool;
+  document.querySelectorAll(".tool").forEach(x => x.setAttribute("aria-pressed", x === b));
+  $("hint").textContent = t("h_" + tool); drawOverlay();
+});
+document.querySelectorAll("#aspect button").forEach(b => b.onclick = () => { setAspect(b.dataset.asp); drawOverlay(); });
+document.querySelectorAll(".bgsw").forEach(b => b.onclick = () => setBg(b.dataset.bg));
+document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => { $("app").dataset.tab = b.dataset.tab; document.querySelectorAll("#tabs button").forEach(x => x.setAttribute("aria-pressed", x === b)); });
+
+let lastFocus = null;
+function openDlg(id) { pause(); lastFocus = document.activeElement; $(id).hidden = false; const f = $(id).querySelector(".btn.primary:not(:disabled), .btn"); if (f) f.focus(); }
+function closeDlg(o) { o.hidden = true; if (lastFocus) lastFocus.focus(); }
+document.querySelectorAll(".overlay").forEach(o => o.addEventListener("click", e => { if (e.target === o || e.target.closest("[data-close]")) closeDlg(o); }));
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") document.querySelectorAll(".overlay:not([hidden])").forEach(closeDlg);
+  if (e.key === " " && !e.target.closest("button, input, select") && document.querySelectorAll(".overlay:not([hidden])").length === 0) { e.preventDefault(); playing ? pause() : play(); }
+});
+$("open-export").onclick = () => { $("queue").hidden = true; openDlg("dlg-export"); };
+$("open-import").onclick = () => openDlg("dlg-cut");
+let toastT = 0;
+function toast(msg) { const el = $("toast"); el.textContent = msg; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => el.hidden = true, 2600); }
+
+const GC = ["#3b74ff", "#f2a51a", "#13a07a", "#e2437a", "#8a5cf6", "#0ea5c6", "#e86a2c", "#5b9e1f", "#c43bd1", "#d4a20a", "#2f7d8f", "#ef5a5a", "#6672e8", "#9b6b3c", "#1f9e5a"];
+$("cut-prev").innerHTML = DRAW.map(id => `<g class="pc" data-pc="${id}">${shapes(id)}</g>`).join("");
+let cutLv = 3, cutDone = false; const cutCats = new Set(["hair", "face", "clothes", "items", "hands"]);
+const kept = id => PARTS[id].lv <= cutLv && (PARTS[id].cat === "body" || cutCats.has(PARTS[id].cat));
+const groupOf = id => kept(id) ? id : groupOf(PARTS[id].merge);
+function cutGroups() { const g = {}; TREE.forEach(id => { const r = groupOf(id); (g[r] = g[r] || []).push(id); }); return g; }
+const CENTER = { body: [0, -45], legL: [-20, 40], legR: [20, 40], head: [0, -150], hairBack: [0, -190], ponytail: [84, -160], hairFront: [0, -196], eyes: [0, -142], mouth: [0, -114], scarf: [22, -70], armL: [-44, -58], handL: [-44, -20], armR: [44, -58], handR: [44, -20], wand: [70, -54] };
+const BOOST = { eyes: [0, 0], mouth: [0, 6], hairFront: [0, -10], hairBack: [-18, -6], ponytail: [16, 0], wand: [14, -6], handL: [-6, 8], handR: [10, 8], scarf: [10, 4] };
+function drawCut() {
+  const groups = cutGroups(), roots = Object.keys(groups), prev = $("prev");
+  prev.classList.toggle("done", cutDone);
+  document.querySelectorAll("#cut-prev .pc").forEach(g => {
+    const id = g.dataset.pc, r = groupOf(id), c = CENTER[r], b = BOOST[r] || [0, 0];
+    const dx = cutDone ? (c[0] - 0) * .16 + b[0] : 0, dy = cutDone ? (c[1] + 70) * .14 + b[1] : 0;
+    g.style.transform = `translate(${dx}px, ${dy}px)`;
+    g.style.setProperty("--gc", GC[roots.indexOf(r) % GC.length]);
+  });
+  $("res-count").textContent = cutDone ? t("pieces")(roots.length) : "";
+  $("tiles").className = cutDone ? "tiles" : "";
+  $("tiles").innerHTML = cutDone ? roots.map((r, i) => `<div class="tile" data-g="${r}" style="--gc:${GC[i % GC.length]}">${thumbSvg(groups[r], 8)}<b><i class="dot"></i>${t(r)}</b><small>${groups[r].length > 1 ? t("merged")(groups[r].length) : "&nbsp;"}</small></div>`).join("") : `<div class="empty">${t("empty")}</div>`;
+  $("use-cut").disabled = !cutDone;
+  $("run-cut").querySelector("span").textContent = t(cutDone ? "re_cut" : "run_cut");
+}
+$("tiles").addEventListener("pointerover", e => { const tl = e.target.closest(".tile"); const prev = $("prev"); if (!tl) return; const gs = cutGroups()[tl.dataset.g]; prev.classList.add("dim"); document.querySelectorAll("#cut-prev .pc").forEach(g => g.classList.toggle("hl", gs.includes(g.dataset.pc))); });
+$("tiles").addEventListener("pointerleave", () => $("prev").classList.remove("dim"));
+document.querySelectorAll(".lvl").forEach(b => b.onclick = () => { cutLv = +b.dataset.lv; document.querySelectorAll(".lvl").forEach(x => x.setAttribute("aria-pressed", x === b)); drawCut(); });
+document.querySelectorAll(".chip").forEach(b => b.onclick = () => { const c = b.dataset.cat; cutCats.has(c) ? cutCats.delete(c) : cutCats.add(c); b.setAttribute("aria-pressed", cutCats.has(c)); drawCut(); });
+$("run-cut").onclick = () => {
+  const prev = $("prev"), btn = $("run-cut");
+  cutDone = false; drawCut(); btn.disabled = true;
+  prev.classList.remove("busy"); void prev.offsetWidth; prev.classList.add("busy");
+  setTimeout(() => { prev.classList.remove("busy"); cutDone = true; btn.disabled = false; drawCut(); }, 900);
+};
+$("use-cut").onclick = () => { closeDlg($("dlg-cut")); toast(t("used")(Object.keys(cutGroups()).length)); };
+$("file-in").onchange = e => {
+  const fs = [...e.target.files]; $("thumbs").innerHTML = "";
+  fs.slice(0, 10).forEach(f => { if (f.type.startsWith("image/")) { const im = document.createElement("img"); im.alt = f.name; im.src = URL.createObjectURL(f); $("thumbs").appendChild(im); } });
+  if (fs.length) toast(t("files")(fs.length));
+};
+
+function chosenFmts() { return [...document.querySelectorAll(".fmt")].filter(b => b.getAttribute("aria-pressed") === "true").map(b => b.dataset.fmt); }
+function refreshRender() { const n = chosenFmts().length; $("render").textContent = t("render")(n); $("render").disabled = !n; }
+document.querySelectorAll(".fmt").forEach(b => b.onclick = () => { b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") !== "true"); refreshRender(); });
+document.querySelectorAll(".sw").forEach(b => b.onclick = () => document.querySelectorAll(".sw").forEach(x => x.setAttribute("aria-pressed", x === b)));
+$("ex-asp").onchange = e => { setAspect(e.target.value); drawOverlay(); };
+$("render").onclick = () => {
+  const list = chosenFmts(), q = $("queue");
+  q.hidden = false;
+  q.innerHTML = list.map(f => `<div class="q" data-q="${f}"><b>${f}</b><div class="bar"><i></i></div><span class="st">${t("q_wait")}</span></div>`).join("");
+  $("render").disabled = true; let i = 0;
+  (function next() {
+    if (i >= list.length) { refreshRender(); return; }
+    const row = q.querySelector(`[data-q="${list[i]}"]`), bar = row.querySelector("i"), st = row.querySelector(".st");
+    st.textContent = `${t("q_run")} · ${$("ex-res").value}`; let p = 0;
+    const iv = setInterval(() => { p += 4; bar.style.width = p + "%"; if (p >= 100) { clearInterval(iv); row.classList.add("done"); st.textContent = t("q_done"); i++; next(); } }, 28);
+  })();
+};
+
+function isDark() { const a = document.documentElement.dataset.theme; return a ? a === "dark" : matchMedia("(prefers-color-scheme: dark)").matches; }
+function themeIcon() { $("theme").querySelector("svg").innerHTML = isDark() ? '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>' : '<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/>'; }
+try { const th = localStorage.getItem("tstm-theme"); if (th === "dark" || th === "light") document.documentElement.dataset.theme = th; } catch (e) {}
+$("theme").onclick = () => { const n = isDark() ? "light" : "dark"; document.documentElement.dataset.theme = n; try { localStorage.setItem("tstm-theme", n); } catch (e) {} themeIcon(); };
+
+function setLang(l) {
+  lang = l; try { localStorage.setItem("tstm-lang", l); } catch (e) {}
+  document.documentElement.lang = l;
+  $("lang-th").setAttribute("aria-pressed", l === "th"); $("lang-en").setAttribute("aria-pressed", l === "en");
+  document.querySelectorAll("[data-i]").forEach(el => { const v = T[l][el.dataset.i]; if (typeof v === "string") el.textContent = v; });
+  document.querySelectorAll("[data-ih]").forEach(el => el.innerHTML = T[l][el.dataset.ih]);
+  $("hint").textContent = t("h_" + tool);
+  refreshRender(); render(true); drawCut();
+}
+$("lang-th").onclick = () => setLang("th");
+$("lang-en").onclick = () => setLang("en");
+
+setAspect("916"); setBg("alpha"); computeWorld(); applyPose();
+IDS.forEach(id => THUMBS[id] = thumbSvg([id], 4));
+themeIcon(); setLang(lang);
+</script>
