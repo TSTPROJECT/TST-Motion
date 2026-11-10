@@ -7,10 +7,8 @@ import "@fontsource/jetbrains-mono/400.css";
 import "./styles.css";
 import "./io/autosave";
 import { App } from "./ui/App";
+import { openStartupFile } from "./ui/open";
 
 render(<App />, document.getElementById("root")!);
-
-// Offline support: only in the built app, never while developing.
-if (import.meta.env.PROD && "serviceWorker" in navigator) {
-  window.addEventListener("load", () => { navigator.serviceWorker.register("./sw.js").catch(() => { /* offline mode unavailable */ }); });
-}
+// Opened by double-clicking a .tstm file in Explorer
+void openStartupFile();

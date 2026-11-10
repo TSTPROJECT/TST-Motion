@@ -1,5 +1,6 @@
 // Opening and creating projects (shared by the home screen and the editor menu).
-import { openProject, newProject, project } from "../model/store";
+import { invoke, isTauri } from "@tauri-apps/api/core";
+import { openProject, newProject } from "../model/store";
 import { loadProject, saveProject } from "../io/db";
 import { loadProjectAssets } from "../io/assets";
 import { readProjectFile } from "../io/projectFile";
@@ -37,9 +38,13 @@ export function pickFile(accept: string, multiple: boolean): Promise<File[]> {
     i.click();
   });
 }
-// Double-clicking a .tstm file opens it in the installed app (Chrome/Edge on computers).
-type LaunchParams = { files: Array<{ getFile: () => Promise<File> }> };
-(window as Window & { launchQueue?: { setConsumer: (f: (p: LaunchParams) => void) => void } }).launchQueue?.setConsumer(async (params) => {
-  const h = params.files?.[0]; if (!h || project.value) return;
-  await openFile(await h.getFile());
-});
+// Double-clicking a .tstm file in Explorer starts the program with that file.
+export async function openStartupFile() {
+  if (!isTauri()) return;
+  try {
+    const name = await invoke<string | null>("startup_file_name");
+    if (!name) return;
+    const bytes = await invoke<ArrayBuffer>("startup_file_bytes");
+    await openFile(new File([bytes], name));
+  } catch (e) { console.warn("Could not open the startup file", e); }
+}

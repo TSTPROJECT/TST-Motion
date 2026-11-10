@@ -3,7 +3,7 @@ import { signal } from "@preact/signals";
 
 export type Lang = "th" | "en";
 const saved = (() => { try { return localStorage.getItem("tstm-lang"); } catch { return null; } })();
-export const lang = signal<Lang>(saved === "th" || saved === "en" ? saved : (navigator.language || "").toLowerCase().startsWith("th") ? "th" : "en");
+export const lang = signal<Lang>(saved === "en" ? "en" : "th"); // Thai first; English is one tap away
 export function setLang(l: Lang) {
   lang.value = l; document.documentElement.lang = l;
   try { localStorage.setItem("tstm-lang", l); } catch { /* private mode */ }

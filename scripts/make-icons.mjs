@@ -78,7 +78,5 @@ function png(w, h, rgba) {
 }
 
 mkdirSync("public/icons", { recursive: true });
-writeFileSync("public/icons/icon-192.png", draw(192, false));
-writeFileSync("public/icons/icon-512.png", draw(512, false));
-writeFileSync("public/icons/icon-maskable-512.png", draw(512, true));
+writeFileSync("src-tauri/app-icon.png", draw(1024, false)); // source for `npx tauri icon`
 console.log("icons written");

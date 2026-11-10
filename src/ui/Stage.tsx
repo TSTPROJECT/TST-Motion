@@ -197,6 +197,7 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
   useEffect(() => {
     const s = st.current, w = wrap.current!, o = ov.current!;
     const ro = new ResizeObserver(() => {
+      if (!cv.current) return; // already closed
       const r = w.getBoundingClientRect();
       s.dpr = Math.min(2, window.devicePixelRatio || 1); s.w = r.width; s.h = r.height;
       for (const c of [cv.current!, o]) { c.width = Math.round(r.width * s.dpr); c.height = Math.round(r.height * s.dpr); }
