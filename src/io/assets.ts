@@ -44,6 +44,14 @@ async function register(a: Asset, blob: Blob) {
   loaded.set(a.id, { bitmap, mask, mw, mh, url: URL.createObjectURL(blob) });
 }
 
+/** Keep a new picture made inside the program (a cut part). Saved on this device straight away. */
+export async function addAsset(projectId: string, name: string, blob: Blob, w: number, h: number): Promise<Asset> {
+  const a: Asset = { id: uid(), name: name.slice(0, 80), type: blob.type || "image/png", w, h };
+  await putBlob(projectId, a.id, blob); await register(a, blob);
+  bump();
+  return a;
+}
+
 /** Is the picture solid at this pixel (image coordinates)? */
 export function hitAsset(id: string, w: number, h: number, x: number, y: number) {
   const L = loaded.get(id); if (!L || x < 0 || y < 0 || x >= w || y >= h) return false;

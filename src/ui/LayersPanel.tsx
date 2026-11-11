@@ -5,12 +5,14 @@ import { getLoaded, assetsVersion } from "../io/assets";
 import { t } from "../i18n";
 import { Icon } from "./icons";
 import { confirmBox } from "./Dialogs";
+import { cutLayer } from "./CutDialog";
 
 export function LayersPanel() {
   const [editing, setEditing] = useState<string | null>(null);
   rev.value; assetsVersion();
   const p = project.value; if (!p) return null;
   const sel = selected.value, idx = p.layers.findIndex((l) => l.id === sel);
+  const selAsset = !!p.layers[idx]?.asset;
   const name = (id: string | null) => p.layers.find((l) => l.id === id)?.name ?? "";
   const list = [...p.layers].reverse();
 
@@ -21,6 +23,7 @@ export function LayersPanel() {
         <div class="acts">
           <button class="ibtn ghost" title={t("bring_front")} aria-label={t("bring_front")} disabled={idx < 0 || idx === p.layers.length - 1} onClick={() => sel && moveLayer(sel, 1)}><Icon n="up" /></button>
           <button class="ibtn ghost" title={t("send_back")} aria-label={t("send_back")} disabled={idx <= 0} onClick={() => sel && moveLayer(sel, -1)}><Icon n="down" /></button>
+          <button class="ibtn ghost" title={`${t("cut_open")} (C)`} aria-label={t("cut_open")} disabled={!selAsset} onClick={() => sel && (cutLayer.value = sel)}><Icon n="scissors" /></button>
           <button class="ibtn ghost" title={t("duplicate")} aria-label={t("duplicate")} disabled={!sel} onClick={() => sel && duplicateLayer(sel)}><Icon n="copy" /></button>
           <button class="ibtn ghost" title={t("delete")} aria-label={t("delete")} disabled={!sel} onClick={async () => { if (sel && (await confirmBox(t("confirm_delete_layer", { name: name(sel) }), t("delete")))) deleteLayer(sel); }}><Icon n="trash" /></button>
         </div>

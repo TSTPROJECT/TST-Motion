@@ -1,6 +1,6 @@
 // App state, editing actions and undo/redo.
 import { signal, computed } from "@preact/signals";
-import type { Background, Ease, Key, Layer, Prop, Project } from "./types";
+import type { Asset, Background, Ease, Key, Layer, Prop, Project } from "./types";
 import { PROPS, MAX_SECONDS } from "./types";
 import { apply, decompose, invert, localMatrix, mul, poseAt, solve, valueAt, wouldCycle, IDENTITY } from "./anim";
 
@@ -226,25 +226,94 @@ export function setParent(id: string, parent: string | null) {
   return true;
 }
 
+/** Change a layer's pivot while every pose (setup and keys) keeps the picture where it is. */
+function setPivotKeepPlace(l: Layer, npx: number, npy: number) {
+  const fix = (pose: { x: number; y: number; rot: number; sx: number; sy: number }) => {
+    const m = localMatrix({ ...pose, o: 1 }, l.px, l.py);
+    return apply(m, npx, npy); // where the new pivot point currently sits
+  };
+  // setup pose
+  const [bx, by] = fix(l.base); const dbx = bx - l.base.x, dby = by - l.base.y;
+  // keys: shift each x/y key using the pose at that key's frame
+  const shiftTrack = (pr: "x" | "y") => l.tracks[pr]?.forEach((k) => {
+    const pose = poseAt(l, k.f); const [nx, ny] = fix(pose);
+    k.v += pr === "x" ? nx - pose.x : ny - pose.y;
+  });
+  shiftTrack("x"); shiftTrack("y");
+  l.base.x += dbx; l.base.y += dby;
+  l.px = npx; l.py = npy;
+}
+
 /** Move the pivot without moving the picture. */
 export function movePivotLive(id: string, npx: number, npy: number) {
-  live((p) => {
-    const l = p.layers.find((x) => x.id === id); if (!l) return;
-    const fix = (pose: { x: number; y: number; rot: number; sx: number; sy: number }) => {
-      const m = localMatrix({ ...pose, o: 1 }, l.px, l.py);
-      return apply(m, npx, npy); // where the new pivot point currently sits
-    };
-    // setup pose
-    const [bx, by] = fix(l.base); const dbx = bx - l.base.x, dby = by - l.base.y;
-    // keys: shift each x/y key using the pose at that key's frame
-    const shiftTrack = (pr: "x" | "y") => l.tracks[pr]?.forEach((k) => {
-      const pose = poseAt(l, k.f); const [nx, ny] = fix(pose);
-      k.v += pr === "x" ? nx - pose.x : ny - pose.y;
-    });
-    shiftTrack("x"); shiftTrack("y");
-    l.base.x += dbx; l.base.y += dby;
-    l.px = npx; l.py = npy;
+  live((p) => { const l = p.layers.find((x) => x.id === id); if (l) setPivotKeepPlace(l, npx, npy); });
+}
+
+// ---------- cutting parts ----------
+export interface Piece {
+  asset: Asset; x: number; y: number; name: string;
+  /** joint to turn around, in the source picture's pixels (default: middle of the piece) */
+  pivot?: [number, number];
+  /** index (in the same list) of the piece this one follows, e.g. forearm → upper arm */
+  parent?: number;
+}
+
+/**
+ * A layer showing `piece` (a crop of `from`'s picture at x,y) exactly where it sat in `from`,
+ * with the same motion, pivot at the middle of the piece.
+ */
+function pieceLayer(from: Layer, piece: Piece): Layer {
+  const l: Layer = JSON.parse(JSON.stringify(from));
+  l.id = uid(); l.name = piece.name.slice(0, 60); l.asset = piece.asset.id;
+  l.px = from.px - piece.x; l.py = from.py - piece.y; // same place on screen
+  if (piece.pivot) setPivotKeepPlace(l, piece.pivot[0] - piece.x, piece.pivot[1] - piece.y);
+  else setPivotKeepPlace(l, piece.asset.w / 2, piece.asset.h / 2);
+  return l;
+}
+function dropUnusedAssets(p: Project) {
+  const used = new Set(p.layers.map((x) => x.asset));
+  p.assets = p.assets.filter((a) => used.has(a.id));
+}
+/**
+ * Cut (or copy) part of a layer into a new layer just above it.
+ * `rest` is the picture left behind (same size as before), or null to leave the layer as it was.
+ */
+export function cutToLayer(id: string, piece: Piece, rest: Asset | null) {
+  let made = "";
+  edit((p) => {
+    const i = p.layers.findIndex((x) => x.id === id); if (i < 0) return;
+    const src = p.layers[i], l = pieceLayer(src, piece);
+    p.assets.push(piece.asset);
+    if (rest) { p.assets.push(rest); src.asset = rest.id; }
+    p.layers.splice(i + 1, 0, l); made = l.id;
+    dropUnusedAssets(p);
   });
+  if (made) selected.value = made;
+}
+/** Swap a layer's picture for an edited one of the same size (erase, remove background). */
+export function replaceAsset(id: string, a: Asset) {
+  edit((p) => {
+    const l = p.layers.find((x) => x.id === id); if (!l) return;
+    p.assets.push(a); l.asset = a.id; dropUnusedAssets(p);
+  });
+}
+/** Replace a layer with its separate pieces. Its children follow the biggest piece. */
+export function splitLayer(id: string, pieces: Piece[]) {
+  if (!pieces.length) return;
+  let first = "";
+  edit((p) => {
+    const i = p.layers.findIndex((x) => x.id === id); if (i < 0) return;
+    const src = p.layers[i], made = pieces.map((pc) => pieceLayer(src, pc));
+    p.assets.push(...pieces.map((pc) => pc.asset));
+    p.layers.splice(i + 1, 0, ...made);
+    const big = made[pieces.reduce((b, pc, k) => (pc.asset.w * pc.asset.h > pieces[b].asset.w * pieces[b].asset.h ? k : b), 0)];
+    for (const c of p.layers.filter((x) => x.parent === id)) reparentKeepPlace(p, c, big.id);
+    pieces.forEach((pc, k) => { if (pc.parent !== undefined && made[pc.parent] && pc.parent !== k) reparentKeepPlace(p, made[k], made[pc.parent].id); });
+    p.layers.splice(i, 1);
+    dropUnusedAssets(p);
+    first = made[made.length - 1].id;
+  });
+  if (first) selected.value = first;
 }
 
 // ---------- project settings ----------

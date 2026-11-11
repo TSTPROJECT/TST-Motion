@@ -1,6 +1,6 @@
 {
   "name": "tst-motion",
-  "version": "0.2.0",
+  "version": "0.3.1",
   "description": "Free, open-source 2D motion animation app for desktop and phone (Thai / English)",
   "private": true,
   "type": "module",
@@ -21,6 +21,7 @@
     "fflate": "^0.8.3",
     "gifenc": "1.0.3",
     "mediabunny": "1.62.1",
+    "onnxruntime-web": "1.31.1",
     "preact": "^11.2.0"
   },
   "devDependencies": {

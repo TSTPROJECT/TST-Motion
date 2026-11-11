@@ -14,6 +14,7 @@ import { PropsPanel } from "./PropsPanel";
 import { Timeline } from "./Timeline";
 import { SettingsDialog, settingsOpen, confirmBox } from "./Dialogs";
 import { ExportDialog } from "./ExportDialog";
+import { CutDialog, cutLayer } from "./CutDialog";
 import { TopToggles } from "./Home";
 import { toast, installPrompt, installed, install, isIos } from "./shell";
 import { openFile, pickFile } from "./open";
@@ -32,6 +33,12 @@ async function importNow(files: File[]) {
   if (r.failed.length) toast(t("import_failed", { names: r.failed.slice(0, 3).join(", ") }), true);
 }
 export const pickImages = async () => importNow(await pickFile(ACCEPT, true));
+
+function openCut() {
+  const l = project.value?.layers.find((x) => x.id === selected.value);
+  if (!l?.asset) { toast(t("cut_need_image"), true); return; }
+  playing.value = false; cutLayer.value = l.id;
+}
 
 async function saveFile() {
   const p = project.value; if (!p) return;
@@ -106,6 +113,7 @@ export function Editor() {
       else if (key === "r") tool.value = "rotate";
       else if (key === "p") tool.value = "pivot";
       else if (key === "h") tool.value = "hand";
+      else if (key === "c") openCut();
       else if (key === "escape") selected.value = null;
       else if ((key === "delete" || key === "backspace") && selected.value) {
         const l = pp.layers.find((x) => x.id === selected.value);
@@ -146,6 +154,7 @@ export function Editor() {
               <div class="menu" role="menu" onClick={() => setMenu(false)}>
                 <button onClick={pickImages}><Icon n="import" />{t("import")}</button>
                 <button onClick={() => setExportInfo(true)}><Icon n="export" />{t("export")}</button>
+                <button onClick={openCut}><Icon n="scissors" />{t("cut_open")}</button>
                 <button onClick={redo} disabled={!canRedo.value}><Icon n="redo" />{t("redo")}</button>
                 <hr />
                 <button onClick={saveFile}><Icon n="save" />{t("save_file")}</button>
@@ -175,6 +184,7 @@ export function Editor() {
 
       {settingsOpen.value && <SettingsDialog />}
       {exportInfo && <ExportDialog onClose={() => setExportInfo(false)} />}
+      {cutLayer.value && <CutDialog key={cutLayer.value} />}
     </div>
   );
 }
