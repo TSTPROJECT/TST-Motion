@@ -73,7 +73,7 @@ const th = {
   cut_open: "ตัดชิ้นส่วน", cut_title: "ตัดชิ้นส่วน", cut_finish: "เสร็จ", cut_loading: "กำลังเปิดรูป...", cut_working: "กำลังทำ...",
   cut_t_wand: "ไม้กายสิทธิ์", cut_t_lasso: "บ่วงบาศ", cut_t_brush: "พู่กันเลือก", cut_t_erase: "ยางลบส่วนที่เลือก", cut_t_hand: "เลื่อนจอ",
   cut_tip_wand: "แตะสีที่ต้องการ ระบบเลือกบริเวณที่สีใกล้กันให้ · Shift เพิ่ม · Alt ลดออก",
-  cut_tip_lasso: "ลากวนรอบส่วนที่ต้องการ ปล่อยนิ้วแล้วจะปิดเส้นให้เอง · Shift เพิ่ม · Alt ลดออก",
+  cut_tip_lasso: "ลากวนรอบส่วนที่ต้องการ หรือคลิกทีละจุดให้ละเอียด แล้วคลิกจุดแรกเพื่อปิด · Shift เพิ่ม · Alt ลดออก",
   cut_tip_brush: "ระบายทับส่วนที่ต้องการเลือก · [ ] ปรับขนาด",
   cut_tip_erase: "ระบายทับเพื่อเอาออกจากส่วนที่เลือก (ภาพไม่ถูกลบ) · [ ] ปรับขนาด",
   cut_tip_hand: "ลากเพื่อเลื่อนจอ หมุนล้อเมาส์หรือใช้สองนิ้วเพื่อซูม",
@@ -117,6 +117,16 @@ const th = {
   pins_clear: "ลบหมุดทั้งหมด",
   pins_reset: "คืนรูปเดิมที่เฟรมนี้",
   pin_tool_btn: "ใช้เครื่องมือหมุด",
+  cut_magnet: "แม่เหล็กเกาะขอบ (เส้นวิ่งเข้าหาขอบภาพเอง)",
+  cut_lasso_how: "ลากเพื่อวาดเส้นอิสระ หรือคลิกทีละจุดเพื่อลากเส้นตรงทีละช่วง (ละเอียดกว่า) · ปิดรูปโดยคลิกจุดแรก ดับเบิลคลิก หรือ Enter · Backspace ลบจุดล่าสุด · Esc ยกเลิก · ซูมเข้าเยอะๆ จะเห็นตารางพิกเซล",
+  cut_grow: "ขยายขอบ 1px",
+  cut_grow_tip: "ขยายส่วนที่เลือกออก 1 พิกเซลรอบด้าน",
+  cut_shrink: "หดขอบ 1px",
+  cut_shrink_tip: "หดส่วนที่เลือกเข้า 1 พิกเซลรอบด้าน",
+  cut_smooth: "เกลาขอบเรียบ",
+  cut_smooth_tip: "ลบรอยหยักและจุดเล็กๆ ที่ขอบส่วนที่เลือก",
+  cut_preview: "ดูเฉพาะที่เลือก",
+  cut_preview_tip: "ซ่อนส่วนที่ไม่ได้เลือก เพื่อตรวจขอบให้ละเอียดก่อนตัด",
 };
 export type Key = keyof typeof th;
 const en: Record<Key, string> = {
@@ -182,7 +192,7 @@ const en: Record<Key, string> = {
   cut_open: "Cut parts", cut_title: "Cut parts", cut_finish: "Done", cut_loading: "Opening the picture...", cut_working: "Working...",
   cut_t_wand: "Magic wand", cut_t_lasso: "Lasso", cut_t_brush: "Select brush", cut_t_erase: "Unselect brush", cut_t_hand: "Pan",
   cut_tip_wand: "Tap a colour to pick the area of similar colour · Shift adds · Alt takes away",
-  cut_tip_lasso: "Draw around the part; the line closes when you let go · Shift adds · Alt takes away",
+  cut_tip_lasso: "Draw around the part, or click point by point for precision and click the first point to close · Shift adds · Alt takes away",
   cut_tip_brush: "Paint over what you want to pick · [ ] change size",
   cut_tip_erase: "Paint to take pixels out of the selection (the picture is not erased) · [ ] change size",
   cut_tip_hand: "Drag to pan. Use the mouse wheel or two fingers to zoom",
@@ -226,6 +236,16 @@ const en: Record<Key, string> = {
   pins_clear: "Remove all pins",
   pins_reset: "Unbend at this frame",
   pin_tool_btn: "Use the Pins tool",
+  cut_magnet: "Magnet: the line snaps to edges in the picture",
+  cut_lasso_how: "Drag to draw freely, or click point by point for straight lines (more precise) · Close by clicking the first point, double-clicking or Enter · Backspace removes the last point · Esc cancels · Zoom far in to see the pixel grid",
+  cut_grow: "Grow 1px",
+  cut_grow_tip: "Grow the selection by one pixel all round",
+  cut_shrink: "Shrink 1px",
+  cut_shrink_tip: "Shrink the selection by one pixel all round",
+  cut_smooth: "Smooth edge",
+  cut_smooth_tip: "Round off jagged bits along the selection edge",
+  cut_preview: "Show only chosen",
+  cut_preview_tip: "Hide what is not chosen, to check the edge before cutting",
 };
 const dict = { th, en };
 export function t(k: Key, vars?: Record<string, string | number>) {

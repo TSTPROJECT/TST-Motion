@@ -22,8 +22,8 @@ const TOOLS: Array<{ id: CutTool; icon: string; key: string }> = [
 const PARTS: Key[] = ["part_head", "part_hair", "part_face", "part_body", "part_arm_l", "part_arm_r", "part_hand", "part_leg_l", "part_leg_r", "part_cloth", "part_item"];
 
 const PREFS = "tstm-cut";
-interface Prefs { tool: CutTool; tol: number; contig: boolean; size: number; soft: boolean; level: 0 | 1 | 2; detail: 0 | 1 | 2 }
-const DEF: Prefs = { tool: "ai", tol: 32, contig: true, size: 40, soft: true, level: 1, detail: 1 };
+interface Prefs { tool: CutTool; tol: number; contig: boolean; size: number; soft: boolean; level: 0 | 1 | 2; detail: 0 | 1 | 2; magnet: boolean }
+const DEF: Prefs = { tool: "ai", tol: 32, contig: true, size: 40, soft: true, level: 1, detail: 1, magnet: true };
 const loadPrefs = (): Prefs => { try { return { ...DEF, ...JSON.parse(localStorage.getItem(PREFS) || "{}") }; } catch { return DEF; } };
 
 const MAX_PIXELS = 50e6; // about 7000×7000; more would not fit in a 4 GB machine's memory
@@ -46,7 +46,9 @@ interface Work {
   stroke: OffscreenCanvas; strokeCtx: OffscreenCanvasRenderingContext2D;
   undo: Uint8Array[]; redo: Uint8Array[]; maxUndo: number; any: boolean;
   z: number; ox: number; oy: number; fitted: boolean; auto: boolean;
-  lasso: Array<[number, number]> | null; brushAt: [number, number] | null; last: [number, number] | null;
+  lasso: Array<[number, number]> | null;
+  /** lasso by clicks: straight lines between the clicked points (null = drawing by dragging) */
+  poly: boolean; lassoDown: [number, number] | null; brushAt: [number, number] | null; last: [number, number] | null;
   hover: [number, number] | null; space: boolean;
   pointers: Map<number, [number, number]>; pinch: { d: number; cx: number; cy: number } | null; pan: [number, number] | null;
   /** auto parts: part number per pixel (0 = none), its undo steps, and a tap or paint stroke in progress */
@@ -74,6 +76,8 @@ export function CutDialog() {
   const [redoN, setRedoN] = useState(0);
   const [name, setName] = useState("");
   const [tipOff, setTipOff] = useState(false);
+  const [preview, setPreview] = useState(false); // show only what is chosen, to check the edge
+  const previewRef = useRef(preview); previewRef.current = preview;
   const [aiSign, setAiSign] = useState<1 | 0>(1); // next tap: 1 = "this part", 0 = "not this"
   const [aiLooking, setAiLooking] = useState(false);
   const [parts, setParts] = useState<AutoPart[] | null>(null);
@@ -113,11 +117,27 @@ export function CutDialog() {
     g.drawImage(w.pic, 0, 0); g.drawImage(w.over, 0, 0);
     g.restore();
     g.strokeStyle = "rgba(127,127,127,.6)"; g.lineWidth = 1; g.strokeRect(w.ox - 0.5, w.oy - 0.5, iw * w.z + 1, ih * w.z + 1);
-    // lasso line
-    if (w.lasso && w.lasso.length > 1) {
-      g.beginPath(); w.lasso.forEach(([x, y], i) => (i ? g.lineTo : g.moveTo).call(g, w.ox + x * w.z, w.oy + y * w.z));
+    // pixel grid when zoomed far in, so single pixels can be picked
+    if (w.z >= 10) {
+      const c0 = Math.max(0, Math.floor(-w.ox / w.z)), c1 = Math.min(iw, Math.ceil((c.width / dpr - w.ox) / w.z));
+      const r0 = Math.max(0, Math.floor(-w.oy / w.z)), r1 = Math.min(ih, Math.ceil((c.height / dpr - w.oy) / w.z));
+      g.beginPath();
+      for (let x = c0; x <= c1; x++) { const sx = Math.round(w.ox + x * w.z) + 0.5; g.moveTo(sx, w.oy + r0 * w.z); g.lineTo(sx, w.oy + r1 * w.z); }
+      for (let y = r0; y <= r1; y++) { const sy = Math.round(w.oy + y * w.z) + 0.5; g.moveTo(w.ox + c0 * w.z, sy); g.lineTo(w.ox + c1 * w.z, sy); }
+      g.lineWidth = 1; g.strokeStyle = "rgba(128,128,128,.35)"; g.stroke();
+    }
+    // lasso line (and, when clicking points, the line to the pointer)
+    if (w.lasso && w.lasso.length) {
+      const pts = w.lasso.map(([x, y]) => [w.ox + x * w.z, w.oy + y * w.z]);
+      if (w.poly && w.hover) pts.push(w.hover);
+      g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
       g.lineWidth = 3; g.strokeStyle = "rgba(0,0,0,.55)"; g.stroke();
       g.lineWidth = 1.5; g.strokeStyle = "#fff"; g.setLineDash([5, 4]); g.stroke(); g.setLineDash([]);
+      if (w.poly) {
+        for (const [x, y] of pts.slice(0, w.lasso.length)) { g.fillStyle = "#fff"; g.fillRect(x - 2.5, y - 2.5, 5, 5); g.strokeStyle = "rgba(0,0,0,.6)"; g.lineWidth = 1; g.strokeRect(x - 2.5, y - 2.5, 5, 5); }
+        const [fx, fy] = pts[0], closeIt = w.hover && w.lasso.length > 2 && Math.hypot(w.hover[0] - fx, w.hover[1] - fy) < 10;
+        g.beginPath(); g.arc(fx, fy, closeIt ? 9 : 6, 0, Math.PI * 2); g.lineWidth = 2; g.strokeStyle = closeIt ? "#13a067" : "#fff"; g.stroke();
+      }
     }
     // AI taps: green = this part, red = not this
     for (const [x, y, l] of aiPts.current) {
@@ -154,11 +174,12 @@ export function CutDialog() {
       const yy = b.y + y; let m = yy * iw + b.x, o = y * b.w * 4;
       for (let x = 0; x < b.w; x++, m++, o += 4) {
         const v = mask[m], xx = b.x + x;
-        if (v >= 128 && ((xx > 0 && mask[m - 1] < 128) || (xx < iw - 1 && mask[m + 1] < 128) || (yy > 0 && mask[m - iw] < 128) || (yy < ih - 1 && mask[m + iw] < 128))) {
+        if (!previewRef.current && v >= 128 && ((xx > 0 && mask[m - 1] < 128) || (xx < iw - 1 && mask[m + 1] < 128) || (yy > 0 && mask[m - iw] < 128) || (yy < ih - 1 && mask[m + iw] < 128))) {
           d[o] = EDGE[0]; d[o + 1] = EDGE[1]; d[o + 2] = EDGE[2]; d[o + 3] = 255; continue;
         }
-        // blend between "dimmed" (v = 0) and "tinted" (v = 255)
         const k = v / 255;
+        if (previewRef.current) { d[o] = 28; d[o + 1] = 31; d[o + 2] = 40; d[o + 3] = Math.round(255 * (1 - k)); continue; }
+        // blend between "dimmed" (v = 0) and "tinted" (v = 255)
         d[o] = Math.round(DIM[0] * (1 - k) + TINT[0] * k); d[o + 1] = Math.round(DIM[1] * (1 - k) + TINT[1] * k); d[o + 2] = Math.round(DIM[2] * (1 - k) + TINT[2] * k);
         d[o + 3] = Math.round(DIM[3] * (1 - k) + TINT[3] * k);
       }
@@ -254,6 +275,16 @@ export function CutDialog() {
     if (prefsRef.current.tool === "auto") { const m = w.lredo.pop(); if (!m || !w.labels) return; w.lundo.push(w.labels); w.labels = m; afterLabels(); return; }
     const m = w.redo.pop(); if (!m) return; endAi(); w.undo.push(w.mask); w.mask = m; changed();
   };
+  /** Fine-tune the selection edge by one pixel, or round off its jagged bits. */
+  const refine = (how: "grow" | "shrink" | "smooth") => {
+    const w = W.current; if (!w) return; endAi(); pushUndo();
+    const { w: iw, h: ih } = w.img; let m = w.mask;
+    if (how === "grow") m = M.grow(m, iw, ih);
+    else if (how === "shrink") { const inv = m.map((v) => 255 - v); m = M.grow(inv, iw, ih).map((v) => 255 - v); }
+    else { const s2 = M.soften(M.soften(m, iw, ih), iw, ih); m = s2.map((v) => (v >= 128 ? 255 : 0)); }
+    if (how !== "shrink") M.onlySolid(m, w.img);
+    w.mask = m; changed();
+  };
   const setAll = (v: 0 | 255) => { const w = W.current; if (!w) return; endAi(); pushUndo(); w.mask.fill(v); if (v) M.onlySolid(w.mask, w.img); changed(); };
   const invertSel = () => { const w = W.current; if (!w) return; endAi(); pushUndo(); M.invert(w.mask); M.onlySolid(w.mask, w.img); changed(); };
   const selectBg = () => {
@@ -297,7 +328,7 @@ export function CutDialog() {
         img: { w: iw, h: ih, data }, first: { w: iw, h: ih, data }, mask: new Uint8Array(iw * ih),
         pic, over, overCtx: over.getContext("2d")!, stroke, strokeCtx: stroke.getContext("2d", { willReadFrequently: true })!,
         undo: [], redo: [], any: false, maxUndo: Math.max(3, Math.min(20, Math.floor(120e6 / (iw * ih)))),
-        z: 1, ox: 0, oy: 0, fitted: false, auto: true, lasso: null, brushAt: null, last: null, hover: null, space: false,
+        z: 1, ox: 0, oy: 0, fitted: false, auto: true, lasso: null, poly: false, lassoDown: null, brushAt: null, last: null, hover: null, space: false,
         pointers: new Map(), pinch: null, pan: null, labels: null, lundo: [], lredo: [], ldown: null,
       };
       setReady(true);
@@ -339,6 +370,28 @@ export function CutDialog() {
     return [(e.clientX - r.left - w.ox) / w.z, (e.clientY - r.top - w.oy) / w.z];
   };
   const local = (e: PointerEvent | WheelEvent): [number, number] => { const r = cv.current!.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  /** Magnet: move a lasso point onto the strongest edge (colour or see-through change) close to it. */
+  const snap = (at: [number, number]): [number, number] => {
+    const w = W.current!; if (!prefsRef.current.magnet) return at;
+    const { w: iw, h: ih, data } = w.img, r = Math.min(24, Math.max(2, Math.round(7 / w.z)));
+    const edge = (x: number, y: number) => {
+      if (x < 1 || y < 1 || x >= iw - 1 || y >= ih - 1) return 0;
+      let gx = 0, gy = 0;
+      for (let c = 0; c < 4; c++) {
+        const k = c === 3 ? 3 : 1, at2 = (xx: number, yy: number) => data[(yy * iw + xx) * 4 + c];
+        gx += k * Math.abs(at2(x + 1, y) - at2(x - 1, y)); gy += k * Math.abs(at2(x, y + 1) - at2(x, y - 1));
+      }
+      return gx + gy;
+    };
+    const cx = Math.round(at[0]), cy = Math.round(at[1]);
+    let best = edge(cx, cy) * 1.15, bx = at[0], by = at[1];
+    for (let y = cy - r; y <= cy + r; y++) for (let x = cx - r; x <= cx + r; x++) {
+      const d = Math.hypot(x - cx, y - cy); if (d > r) continue;
+      const e = edge(x, y) * (1 - (0.35 * d) / r); // nearer edges win a tie
+      if (e > best) { best = e; bx = x; by = y; }
+    }
+    return best > 60 ? [bx, by] : at;
+  };
   const modeOf = (e: PointerEvent): M.Combine => (e.altKey ? "sub" : e.shiftKey ? "add" : howRef.current);
 
   /** Paint one brush segment into the mask (adds for the brush, removes for the eraser). */
@@ -393,6 +446,7 @@ export function CutDialog() {
     } catch (e) { console.error(e); w.lundo.pop(); toast(t("cut_failed"), true); }
     finally { setAiLooking(false); }
   };
+  const finishPoly = () => { const w = W.current!; w.poly = false; w.lassoDown = null; lassoDone((w as Work & { lassoHow?: M.Combine }).lassoHow ?? howRef.current); };
   const lassoDone = (how: M.Combine) => {
     const w = W.current!, pts = w.lasso; w.lasso = null;
     if (!pts || pts.length < 3) { paint(); return; }
@@ -443,7 +497,14 @@ export function CutDialog() {
       if (prefsRef.current.soft) sel = M.grow(sel, w.img.w, w.img.h); // take the blended edge pixels too
       pushUndo(); M.combine(w.mask, sel, modeOf(e)); changed();
     } else if (tl === "lasso") {
-      w.lasso = [at]; w.last = null; (w as Work & { lassoHow?: M.Combine }).lassoHow = modeOf(e);
+      const pt = snap(at);
+      if (w.poly && w.lasso) {
+        // clicking points: near the first point (or a double click) closes the shape
+        const f0 = w.lasso[0], lp = local(e);
+        if (w.lasso.length > 2 && (Math.hypot((f0[0] * w.z + w.ox) - lp[0], (f0[1] * w.z + w.oy) - lp[1]) < 10 || e.detail >= 2)) { finishPoly(); return; }
+        w.lasso.push(pt); w.lassoDown = local(e); paint(); return;
+      }
+      w.lasso = [pt]; w.last = null; w.poly = false; w.lassoDown = local(e); (w as Work & { lassoHow?: M.Combine }).lassoHow = modeOf(e);
     } else {
       pushUndo(); w.brushAt = at; brushSeg(at, at, tl === "erase");
     }
@@ -468,7 +529,14 @@ export function CutDialog() {
       if (ld.moved) { paintLabel(ld.last, at); ld.last = at; }
       return;
     }
-    if (w.lasso) { const l = w.lasso[w.lasso.length - 1]; if (Math.hypot(at[0] - l[0], at[1] - l[1]) * w.z > 2) w.lasso.push(at); paint(); return; }
+    if (w.lasso && w.lassoDown) {
+      // pressed and dragging: draw freely (also in the middle of a clicked shape)
+      if (Math.hypot(lp[0] - w.lassoDown[0], lp[1] - w.lassoDown[1]) > 4) {
+        const l = w.lasso[w.lasso.length - 1]; if (Math.hypot(at[0] - l[0], at[1] - l[1]) * w.z > 2) w.lasso.push(snap(at));
+      }
+      paint(); return;
+    }
+    if (w.lasso && w.poly) { paint(); return; }
     if (w.brushAt) { brushSeg(w.brushAt, at, prefsRef.current.tool === "erase"); w.brushAt = at; return; }
     paint();
   };
@@ -477,7 +545,12 @@ export function CutDialog() {
     w.pointers.delete(e.pointerId);
     if (w.pinch) { if (w.pointers.size < 2) w.pinch = null; return; }
     w.pan = null;
-    if (w.lasso) lassoDone((w as Work & { lassoHow?: M.Combine }).lassoHow ?? howRef.current);
+    if (w.lasso && w.lassoDown) {
+      const lp = local(e), dragged = Math.hypot(lp[0] - w.lassoDown[0], lp[1] - w.lassoDown[1]) > 4 || w.lasso.length > 2;
+      w.lassoDown = null;
+      if (!w.poly && !dragged) { w.poly = true; paint(); } // a click without dragging: start clicking points
+      else if (!w.poly) lassoDone((w as Work & { lassoHow?: M.Combine }).lassoHow ?? howRef.current);
+    }
     if (w.brushAt) { w.brushAt = null; changed(); }
     if (w.ldown) { const ld = w.ldown; w.ldown = null; if (ld.moved) afterLabels(); else void tapPart(ld.at); }
   };
@@ -502,7 +575,11 @@ export function CutDialog() {
       if (e.type !== "keydown") return;
       if ((e.target as HTMLElement)?.closest?.("input, textarea, select")) { if (e.key === "Escape") (e.target as HTMLElement).blur(); return; }
       const ctrl = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
-      if (key === "escape") { e.preventDefault(); if (w?.lasso) { w.lasso = null; paint(); } else close(); return; }
+      if (key === "escape") { e.preventDefault(); if (w?.lasso) { w.lasso = null; w.poly = false; paint(); } else close(); return; }
+      if (w?.poly && w.lasso) {
+        if (key === "enter") { e.preventDefault(); finishPoly(); return; }
+        if (key === "backspace" || key === "delete") { e.preventDefault(); w.lasso.pop(); if (!w.lasso.length) { w.lasso = null; w.poly = false; } paint(); return; }
+      }
       if (ctrl && key === "z") { e.preventDefault(); e.shiftKey ? redoMask() : undoMask(); return; }
       if (ctrl && key === "y") { e.preventDefault(); redoMask(); return; }
       if (ctrl && key === "a") { e.preventDefault(); setAll(255); return; }
@@ -510,7 +587,7 @@ export function CutDialog() {
       if (ctrl && e.shiftKey && key === "i") { e.preventDefault(); invertSel(); return; }
       if (ctrl) return;
       const tl = TOOLS.find((x) => x.key === key); if (tl) { upd({ tool: tl.id }); return; }
-      if (key === "[" || key === "]") upd({ size: Math.min(300, Math.max(2, Math.round(prefsRef.current.size * (key === "]" ? 1.25 : 0.8)))) });
+      if (key === "[" || key === "]") upd({ size: Math.min(300, Math.max(1, Math.round(prefsRef.current.size * (key === "]" ? 1.25 : 0.8)))) });
       if (key === "delete" || key === "backspace") { e.preventDefault(); void erase(); }
     };
     window.addEventListener("keydown", k); window.addEventListener("keyup", k);
@@ -727,9 +804,13 @@ export function CutDialog() {
               <input type="range" min={0} max={160} value={prefs.tol} onInput={(e) => upd({ tol: +(e.target as HTMLInputElement).value })} /></label>
             <label class="cw-check"><input type="checkbox" checked={prefs.contig} onChange={() => upd({ contig: !prefs.contig })} />{t("cut_contig")}</label>
           </>}
+          {tool === "lasso" && <>
+            <label class="cw-check"><input type="checkbox" checked={prefs.magnet} onChange={() => upd({ magnet: !prefs.magnet })} />{t("cut_magnet")}</label>
+            <p class="hint-s">{t("cut_lasso_how")}</p>
+          </>}
           {(tool === "brush" || tool === "erase") && (
             <label class="cw-range">{t("cut_size")} <span class="num">{prefs.size}px</span>
-              <input type="range" min={2} max={300} value={prefs.size} onInput={(e) => upd({ size: +(e.target as HTMLInputElement).value })} /></label>
+              <input type="range" min={1} max={300} value={prefs.size} onInput={(e) => upd({ size: +(e.target as HTMLInputElement).value })} /></label>
           )}
         </section>
 
@@ -740,6 +821,10 @@ export function CutDialog() {
             <button class="btn" disabled={!has} onClick={() => setAll(0)}>{t("cut_clear")}</button>
             <button class="btn" onClick={invertSel}>{t("cut_invert")}</button>
             <button class="btn" onClick={selectBg}>{t("cut_sel_bg")}</button>
+            <button class="btn" disabled={!has} title={t("cut_grow_tip")} onClick={() => refine("grow")}>{t("cut_grow")}</button>
+            <button class="btn" disabled={!has} title={t("cut_shrink_tip")} onClick={() => refine("shrink")}>{t("cut_shrink")}</button>
+            <button class="btn" disabled={!has} title={t("cut_smooth_tip")} onClick={() => refine("smooth")}>{t("cut_smooth")}</button>
+            <button class={"btn" + (preview ? " on" : "")} aria-pressed={preview} disabled={!has} title={t("cut_preview_tip")} onClick={() => { previewRef.current = !preview; setPreview(!preview); refreshOverlay(); }}>{t("cut_preview")}</button>
           </div>
         </section>}
 

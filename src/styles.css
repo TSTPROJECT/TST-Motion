@@ -359,3 +359,11 @@ button:disabled { cursor: default; opacity: .4; }
 .tgl.on i { left: 16px; background: #fff; }
 .grp h3 button.tgl { border: 1px solid var(--line); background: var(--surface-2); padding: 0; }
 .grp h3 button.tgl.on { background: var(--accent); border-color: var(--accent); }
+.btn.on { border-color: var(--accent); color: var(--accent); }
+/* picture swaps */
+.swaps { display: flex; flex-wrap: wrap; gap: 6px; }
+.sw { position: relative; }
+.sw > button:first-child, .sw.add { width: 46px; height: 46px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface-2); padding: 3px; display: grid; place-items: center; color: var(--muted); }
+.sw img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.sw.on > button:first-child { border: 2px solid var(--accent); padding: 2px; }
+.sw .x { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; border: 0; background: var(--danger, #d93a4a); color: #fff; font-size: 12px; line-height: 18px; padding: 0; }
