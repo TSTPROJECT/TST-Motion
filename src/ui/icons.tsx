@@ -45,6 +45,17 @@ const P: Record<string, string> = {
   figure: "M12 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM12 8v6M6 10.5 12 9l6 1.5M8.5 21 12 14l3.5 7",
   split: "M4 4h6v6H4zM14 14h6v6h-6zM14 4h6v6h-6zM4 14h6v6H4z",
   target: "M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4z",
+  pin: "M12 21v-7M8.5 3.5h7l-1 5 3 3.5h-11l3-3.5z",
+  onion: "M9 5a7 7 0 1 0 0 14M12 5a7 7 0 1 1 0 14 7 7 0 0 1 0-14z",
+  images: "M8 3h12a1 1 0 0 1 1 1v12M4 7h12a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1zM3 17l4-4 3 3 2-2 5 5",
+  wind: "M3 8h11a3 3 0 1 0-3-3M3 12h16a3 3 0 1 1-3 3M3 16h7",
+  face: "M12 3a8 9 0 1 0 0 18 8 9 0 0 0 0-18zM9 10v1M15 10v1M9 15.5c1.8 1.4 4.2 1.4 6 0",
+  graph: "M4 20h16M4 20V4M6 18C10 18 11 6 19 6",
+  bookmark: "M6 3h12v18l-6-4-6 4z",
+  star: "M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z",
+  flip: "M12 3v18M9 7 3 17h6zM15 7l6 10h-6z",
+  pen: "M4 20l1.5-5L16 4.5a2.1 2.1 0 0 1 3 3L8.5 18zM14 6.5l3 3",
+  magnet: "M6 4v8a6 6 0 0 0 12 0V4h-4v8a2 2 0 0 1-4 0V4zM6 8h4M14 8h4",
 };
 export function Icon({ n, size }: { n: keyof typeof P | string; size?: number }) {
   const s = size ? { width: `${size}px`, height: `${size}px` } : undefined;

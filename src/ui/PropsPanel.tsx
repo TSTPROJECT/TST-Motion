@@ -1,14 +1,14 @@
 // Numbers for the selected part: position, rotation, size, opacity, pivot, parent, easing.
 import { useRef, useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
-import { project, rev, frame, selected, mode, edit, begin, live, finish, writeProp, toggleKeys, toggleKeyProp, hasKeyAt, keyIndex, setEaseAt, easeAt, setParent, movePivotLive, renameLayer } from "../model/store";
+import { project, rev, frame, selected, mode, tool, advanced, edit, begin, live, finish, writeProp, toggleKeys, toggleKeyProp, hasKeyAt, keyIndex, setEaseAt, easeAt, setParent, movePivotLive, renameLayer } from "../model/store";
 import { valueAt, keyFrames } from "../model/anim";
-import type { Ease, Layer, Prop } from "../model/types";
+import { pinChan, type Chan, type Ease, type Layer, type Prop } from "../model/types";
 import { t, type Key as TKey } from "../i18n";
 import { Icon } from "./icons";
 import { toast } from "./shell";
 
-function KeyDot({ l, pr }: { l: Layer; pr: Prop }) {
+function KeyDot({ l, pr }: { l: Layer; pr: Chan }) {
   const keys = l.tracks[pr];
   const state = !keys?.length ? "none" : keyIndex(keys, frame.value) >= 0 ? "on" : "";
   return <button class="kb" title={t("key_prop")} aria-label={t("key_prop")} onClick={() => toggleKeyProp(l.id, pr)}><i class={"dia " + state} /></button>;
@@ -76,7 +76,13 @@ export function PropsPanel() {
   const ease = easeAt(l, f);
   const others = p.layers.filter((x) => x.id !== l.id);
   const asset = p.assets.find((a) => a.id === l.asset);
-  const kd = (pr: Prop) => (mode.value === "animate" ? <KeyDot l={l} pr={pr} /> : undefined);
+  const kd = (pr: Chan) => (mode.value === "animate" ? <KeyDot l={l} pr={pr} /> : undefined);
+  const adv = advanced.value;
+  const setOn = (fn: (x: Layer) => void, now = false) => (now ? edit : live)((pp) => { const x = pp.layers.find((q) => q.id === l.id); if (x) fn(x); });
+  const chField = (label: string, ch: Chan, step: number, digits: number, suffix?: string) => (
+    <NumField label={label} value={valueAt(l, ch, f)} step={step} digits={digits} suffix={suffix} keyDot={kd(ch)}
+      onLive={(x) => setOn((q) => writeProp(q, ch, x))} onCommit={(x) => setOn((q) => writeProp(q, ch, x), true)} />
+  );
 
   return (
     <aside class="card pane pane-props" aria-label={t("props")}>
@@ -135,20 +141,39 @@ export function PropsPanel() {
 
         <div class="grp">
           <h3>{t("g_pivot")}{asset && <button onClick={() => { begin(); movePivotLive(l.id, asset.w / 2, asset.h / 2); finish(); }}>{t("center_pivot")}</button>}</h3>
-          <NumField label={t("p_px")} value={l.px} step={1} digits={1} onLive={(x) => movePivotLive(l.id, x, l.py)} onCommit={(x) => { begin(); movePivotLive(l.id, x, l.py); finish(); }} />
-          <NumField label={t("p_py")} value={l.py} step={1} digits={1} onLive={(y) => movePivotLive(l.id, l.px, y)} onCommit={(y) => { begin(); movePivotLive(l.id, l.px, y); finish(); }} />
+          {adv && <NumField label={t("p_px")} value={l.px} step={1} digits={1} onLive={(x) => movePivotLive(l.id, x, l.py)} onCommit={(x) => { begin(); movePivotLive(l.id, x, l.py); finish(); }} />}
+          {adv && <NumField label={t("p_py")} value={l.py} step={1} digits={1} onLive={(y) => movePivotLive(l.id, l.px, y)} onCommit={(y) => { begin(); movePivotLive(l.id, l.px, y); finish(); }} />}
         </div>
         {l.parent && (
           <div class="grp">
-            <h3>{t("g_bend")}</h3>
-            <NumField label={t("p_bend")} value={l.bend ?? 0} step={1} digits={0} suffix=" px"
-              onLive={(x) => live((pp) => { const q = pp.layers.find((z) => z.id === l.id); if (q) q.bend = Math.max(0, Math.min(2000, Math.round(x))); })}
-              onCommit={(x) => edit((pp) => { const q = pp.layers.find((z) => z.id === l.id); if (q) q.bend = Math.max(0, Math.min(2000, Math.round(x))); })} />
+            <h3>{t("g_bend")}{!adv && <Toggle on={(l.bend ?? 0) > 0} label={t("g_bend")} onChange={(on) => setOn((q) => { if (on) q.bend = Math.round(Math.max(8, Math.min(asset?.w ?? 60, asset?.h ?? 60) * 0.35)); else delete q.bend; }, true)} />}</h3>
+            {adv && <NumField label={t("p_bend")} value={l.bend ?? 0} step={1} digits={0} suffix=" px"
+              onLive={(x) => setOn((q) => (q.bend = Math.max(0, Math.min(2000, Math.round(x)))))}
+              onCommit={(x) => setOn((q) => (q.bend = Math.max(0, Math.min(2000, Math.round(x)))), true)} />}
             <p class="hint-s">{t("bend_hint")}</p>
+          </div>
+        )}
+        {(l.pins?.length || tool.value === "pin") && (
+          <div class="grp">
+            <h3>{t("g_pins")}{l.pins?.length ? <button onClick={() => setOn((q) => { for (const pn of q.pins ?? []) for (const ax of ["x", "y"] as const) { delete q.tracks[pinChan(pn.id, ax)]; delete q.base[pinChan(pn.id, ax)]; } delete q.pins; }, true)}>{t("pins_clear")}</button> : null}</h3>
+            {!l.pins?.length ? <p class="hint-s">{t("pins_none")}</p> : <>
+              <p class="hint-s">{t("pins_n", { n: l.pins.length })}</p>
+              <button class="btn" onClick={() => setOn((q) => { for (const pn of q.pins ?? []) for (const ax of ["x", "y"] as const) writeProp(q, pinChan(pn.id, ax), 0); }, true)}>{t("pins_reset")}</button>
+              {adv && l.pins.map((pn, i) => <>
+                {chField(`#${i + 1} ↔`, pinChan(pn.id, "x"), 0.5, 1, " px")}
+                {chField(`#${i + 1} ↕`, pinChan(pn.id, "y"), 0.5, 1, " px")}
+              </>)}
+            </>}
+            {tool.value !== "pin" && <button class="btn" onClick={() => (tool.value = "pin")}><Icon n="pin" />{t("pin_tool_btn")}</button>}
           </div>
         )}
         <p class="hint-s">{mode.value === "setup" ? t("mode_setup_hint") : t("mode_animate_hint")}</p>
       </div></div>
     </aside>
   );
+}
+
+/** A small on/off switch. */
+export function Toggle({ on, label, onChange }: { on: boolean; label: string; onChange: (on: boolean) => void }) {
+  return <button class={"tgl" + (on ? " on" : "")} role="switch" aria-checked={on} aria-label={label} title={label} onClick={() => onChange(!on)}><i /></button>;
 }

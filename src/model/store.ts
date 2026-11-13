@@ -1,11 +1,11 @@
 // App state, editing actions and undo/redo.
 import { signal, computed } from "@preact/signals";
-import type { Asset, Background, Ease, Key, Layer, Prop, Project } from "./types";
+import type { Asset, Background, Chan, Ease, Key, Layer, Prop, Project } from "./types";
 import { PROPS, MAX_SECONDS } from "./types";
-import { apply, decompose, invert, localMatrix, mul, poseAt, solve, valueAt, wouldCycle, IDENTITY } from "./anim";
+import { apply, chanDefault, decompose, invert, localMatrix, mul, poseAt, solve, valueAt, wouldCycle, IDENTITY } from "./anim";
 
 export type Mode = "setup" | "animate";
-export type Tool = "move" | "rotate" | "pose" | "pivot" | "hand";
+export type Tool = "move" | "rotate" | "pose" | "pin" | "pivot" | "hand";
 export type Tab = "tl" | "layers" | "props";
 
 export const project = signal<Project | null>(null);
@@ -20,6 +20,12 @@ export const tool = signal<Tool>("move");
 export const tab = signal<Tab>("tl");
 export const canUndo = signal(false);
 export const canRedo = signal(false);
+/** Advanced mode shows the fine controls (numbers, curves, depths); easy mode keeps the screen simple. */
+const advSaved = (() => { try { return localStorage.getItem("tstm-adv") === "1"; } catch { return false; } })();
+export const advanced = signal(advSaved);
+export function setAdvanced(v: boolean) { advanced.value = v; try { localStorage.setItem("tstm-adv", v ? "1" : "0"); } catch { /* private mode */ } }
+/** Onion skin: show nearby frames faintly. */
+export const onion = signal({ on: false, before: 2, after: 2, step: 3 });
 
 export const selectedLayer = computed(() => {
   rev.value;
@@ -97,36 +103,49 @@ export function makeLayer(name: string, asset: string | null, w: number, h: numb
 export const keyIndex = (keys: Key[] | undefined, f: number) => (keys ? keys.findIndex((k) => k.f === f) : -1);
 
 /** Set a property the way the current mode wants: setup pose, or a keyframe at the current frame. */
-export function writeProp(l: Layer, prop: Prop, v: number, f = frame.value) {
+export function writeProp(l: Layer, prop: Chan, v: number, f = frame.value) {
   if (mode.value === "setup") { l.base[prop] = v; return; }
-  let keys = l.tracks[prop];
+  writeKey(l, prop, v, f);
+}
+/** Put a key (whatever the mode). Picture swaps always jump; others ease like the key before. */
+export function writeKey(l: Layer, ch: Chan, v: number, f: number, e?: Ease) {
+  let keys = l.tracks[ch];
+  const jump = ch === "swap";
   if (!keys || keys.length === 0) {
-    keys = l.tracks[prop] = [];
+    keys = l.tracks[ch] = [];
     // first key away from the start: keep the setup pose at frame 0 so there is something to move from
-    if (f !== 0) keys.push({ f: 0, v: l.base[prop], e: "smooth" });
+    if (f !== 0) keys.push({ f: 0, v: l.base[ch] ?? chanDefault(ch), e: jump ? "hold" : "smooth" });
   }
   const i = keyIndex(keys, f);
-  if (i >= 0) keys[i].v = v;
-  else { keys.push({ f, v, e: keys.find((k) => k.f < f)?.e ?? "smooth" }); keys.sort((a, b) => a.f - b.f); }
+  if (i >= 0) { keys[i].v = v; if (e) keys[i].e = e; }
+  else {
+    const before = [...keys].reverse().find((k) => k.f < f);
+    const k: Key = { f, v, e: e ?? (jump ? "hold" : before?.e ?? "smooth") };
+    if (!e && before?.c) k.c = [...before.c];
+    keys.push(k);
+    keys.sort((a, b) => a.f - b.f);
+  }
 }
-export function setProp(id: string, prop: Prop, v: number) {
+export function setProp(id: string, prop: Chan, v: number) {
   edit((p) => { const l = p.layers.find((x) => x.id === id); if (l) writeProp(l, prop, v); });
 }
-export function hasKeyAt(l: Layer, f: number) { return PROPS.some((pr) => keyIndex(l.tracks[pr], f) >= 0); }
+/** Every value of a layer that has keys. */
+export const chans = (l: Layer): Chan[] => Object.keys(l.tracks).filter((k) => l.tracks[k]?.length);
+export function hasKeyAt(l: Layer, f: number) { return chans(l).some((pr) => keyIndex(l.tracks[pr], f) >= 0); }
 
 /** Add keys for all moving properties at the current frame, or remove them if present. */
 export function toggleKeys(id: string) {
   const f = frame.value;
   edit((p) => {
     const l = p.layers.find((x) => x.id === id); if (!l) return;
-    if (hasKeyAt(l, f)) { for (const pr of PROPS) removeKeyAt(l, pr, f); return; }
+    if (hasKeyAt(l, f)) { for (const pr of chans(l)) removeKeyAt(l, pr, f); return; }
     const values = PROPS.map((pr) => valueAt(l, pr, f));
     const m = mode.value; mode.value = "animate";
     PROPS.forEach((pr, i) => writeProp(l, pr, values[i], f));
     mode.value = m;
   });
 }
-export function toggleKeyProp(id: string, pr: Prop) {
+export function toggleKeyProp(id: string, pr: Chan) {
   const f = frame.value;
   edit((p) => {
     const l = p.layers.find((x) => x.id === id); if (!l) return;
@@ -134,23 +153,39 @@ export function toggleKeyProp(id: string, pr: Prop) {
     else { const v = valueAt(l, pr, f); const m = mode.value; mode.value = "animate"; writeProp(l, pr, v, f); mode.value = m; }
   });
 }
-function removeKeyAt(l: Layer, pr: Prop, f: number) {
+export function removeKeyAt(l: Layer, pr: Chan, f: number) {
   const keys = l.tracks[pr]; if (!keys) return;
   const i = keyIndex(keys, f); if (i < 0) return;
   if (keys.length === 1) l.base[pr] = keys[0].v; // keep the look when the last key goes
   keys.splice(i, 1);
   if (keys.length === 0) delete l.tracks[pr];
 }
-export function setEaseAt(id: string, f: number, e: Ease) {
-  edit((p) => { const l = p.layers.find((x) => x.id === id); if (!l) return; for (const pr of PROPS) { const i = keyIndex(l.tracks[pr], f); if (i >= 0) l.tracks[pr]![i].e = e; } });
+export function setEaseAt(id: string, f: number, e: Ease, c?: [number, number, number, number]) {
+  edit((p) => {
+    const l = p.layers.find((x) => x.id === id); if (!l) return;
+    for (const pr of chans(l)) {
+      if (pr === "swap") continue;
+      const i = keyIndex(l.tracks[pr], f); if (i < 0) continue;
+      const k = l.tracks[pr]![i]; k.e = e;
+      if (e === "curve") k.c = c ?? k.c ?? [0.42, 0, 0.58, 1]; else delete k.c;
+    }
+  });
 }
-export function easeAt(l: Layer, f: number): Ease | null {
-  for (const pr of PROPS) { const i = keyIndex(l.tracks[pr], f); if (i >= 0) return l.tracks[pr]![i].e; }
+/** Live version for dragging a curve handle (finish with finish()). */
+export function setCurveLive(id: string, f: number, c: [number, number, number, number]) {
+  live((p) => {
+    const l = p.layers.find((x) => x.id === id); if (!l) return;
+    for (const pr of chans(l)) { if (pr === "swap") continue; const i = keyIndex(l.tracks[pr], f); if (i >= 0) { l.tracks[pr]![i].e = "curve"; l.tracks[pr]![i].c = c; } }
+  });
+}
+export function easeAt(l: Layer, f: number): Ease | null { return keyAt(l, f)?.e ?? null; }
+export function keyAt(l: Layer, f: number): Key | null {
+  for (const pr of chans(l)) { if (pr === "swap") continue; const i = keyIndex(l.tracks[pr], f); if (i >= 0) return l.tracks[pr]![i]; }
   return null;
 }
 /** Move every key of a layer sitting at `from` to `to` (used when dragging a diamond). */
 export function moveKeys(l: Layer, from: number, to: number) {
-  for (const pr of PROPS) {
+  for (const pr of chans(l)) {
     const keys = l.tracks[pr]; if (!keys) continue;
     const i = keyIndex(keys, from); if (i < 0) continue;
     const j = keyIndex(keys, to); if (j >= 0 && j !== i) keys.splice(j, 1);
@@ -170,8 +205,7 @@ export function deleteLayer(id: string) {
     // children keep their place on screen and follow the deleted layer's parent instead
     for (const c of p.layers.filter((x) => x.parent === id)) reparentKeepPlace(p, c, l.parent);
     p.layers = p.layers.filter((x) => x.id !== id);
-    const used = new Set(p.layers.map((x) => x.asset));
-    p.assets = p.assets.filter((a) => used.has(a.id));
+    dropUnusedAssets(p);
   });
   selected.value = project.value?.layers.at(-1)?.id ?? null;
 }
@@ -273,8 +307,10 @@ function pieceLayer(from: Layer, piece: Piece): Layer {
   else setPivotKeepPlace(l, piece.asset.w / 2, piece.asset.h / 2);
   return l;
 }
+/** Pictures still shown by some part (its own or a swap). */
+export const usedAssets = (p: Project) => new Set(p.layers.flatMap((x) => [x.asset, ...(x.swaps ?? [])]));
 function dropUnusedAssets(p: Project) {
-  const used = new Set(p.layers.map((x) => x.asset));
+  const used = usedAssets(p);
   p.assets = p.assets.filter((a) => used.has(a.id));
 }
 /**

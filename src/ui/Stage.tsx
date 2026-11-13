@@ -1,8 +1,12 @@
 // The canvas: draws the frame, lets you pick and drag parts, pan and zoom.
 import { useEffect, useRef, useState } from "preact/hooks";
 import { effect } from "@preact/signals";
-import { project, rev, frame, selected, tool, mode, begin, live, finish, writeProp, movePivotLive, type Tool } from "../model/store";
-import { solve, apply, invert, mul, type Mat, type Solved } from "../model/anim";
+import { project, rev, frame, selected, tool, mode, onion, begin, live, finish, edit, writeProp, movePivotLive, uid, type Tool } from "../model/store";
+import { apply, invert, mul, valueAt, type Mat, type Solved } from "../model/anim";
+import { solveShown } from "../model/physics";
+import { unpinPoint, facePoint, type P } from "../model/warp";
+import { pinChan } from "../model/types";
+import type { Ghost } from "../render/renderer";
 import { pull } from "../model/ik";
 import type { Background, Layer, Project } from "../model/types";
 import { createRenderer, type Renderer } from "../render/renderer";
@@ -17,6 +21,8 @@ type Drag =
   | { k: "rotate"; id: string; c: [number, number]; last: number; acc: number; r0: number; sign: number }
   | { k: "scale"; id: string; ref: [number, number]; d0: number; sx0: number; sy0: number }
   | { k: "pivot"; id: string; inv: Mat }
+  /** pin: drag a pin to bend the picture */
+  | { k: "pin"; id: string; pin: string; inv: Mat; rx: number; ry: number }
   /** pose: the held part (and the one above it) turn so the held point follows the pointer */
   | { k: "ik"; ids: string[]; r0: number[]; sign: number[]; j1: [number, number]; j2: [number, number] | null; e0: [number, number] };
 
@@ -51,13 +57,37 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
   function draw() {
     const s = st.current, p = project.value, c = cv.current, o = ov.current; if (!p || !c || !o || !s.w) return;
     if (!s.renderer) s.renderer = createRenderer(c);
-    s.solved = solve(p, frame.value);
+    s.solved = solveShown(p, frame.value);
     const dv: Mat = mul([s.dpr, 0, 0, s.dpr, 0, 0], view());
-    s.renderer.draw({ project: p, world: s.solved.world, alpha: s.solved.alpha, follow: s.solved.follow }, dv, c.width, c.height);
+    // onion skin: frames before in red, after in green, fainter the further away
+    const ghosts: Ghost[] = [];
+    const on = onion.value;
+    if (on.on) {
+      for (const [dir, n, tint] of [[-1, on.before, [0.92, 0.25, 0.3]], [1, on.after, [0.15, 0.7, 0.35]]] as Array<[number, number, [number, number, number]]>) {
+        for (let i = n; i >= 1; i--) {
+          const g = frame.value + dir * i * on.step; if (g < 0 || g >= p.frames) continue;
+          const S = solveShown(p, g);
+          ghosts.push({ world: S.world, alpha: S.alpha, follow: S.follow, deform: S.deform, pic: S.pic, tint, k: 0.42 * (1 - (i - 1) / (n + 1)) });
+        }
+      }
+    }
+    const S = s.solved;
+    s.renderer.draw({ project: p, world: S.world, alpha: S.alpha, follow: S.follow, deform: S.deform, pic: S.pic, ghosts }, dv, c.width, c.height);
     drawOverlay(p, s.solved);
   }
 
   function screenOf(m: Mat, x: number, y: number) { return apply(mul(view(), m), x, y); }
+  /** Pins of a part: rest point, where it is now (own pixels, after the 3D turn) and on screen. */
+  function pinsOf(l: Layer, S: Solved) {
+    const f = frame.value, m = S.world.get(l.id)!;
+    const face = l.face ? { turn: valueAt(l, "turn", f), nod: valueAt(l, "nod", f) } : null;
+    return (l.pins ?? []).map((q) => {
+      const dx = valueAt(l, pinChan(q.id, "x"), f), dy = valueAt(l, pinChan(q.id, "y"), f);
+      let at: P = [q.x + dx, q.y + dy];
+      if (face && l.face && (face.turn || face.nod)) at = facePoint(l.face, face.turn, face.nod, at[0], at[1]);
+      return { id: q.id, rest: [q.x, q.y] as P, dst: [q.x + dx, q.y + dy] as P, scr: screenOf(m, at[0], at[1]) };
+    });
+  }
   function handlesOf(p: Project, l: Layer, S: Solved) {
     const a = p.assets.find((x) => x.id === l.asset); if (!a) return null;
     const m = S.world.get(l.id)!;
@@ -99,6 +129,20 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
         g.beginPath(); g.arc(x, y, 4.5, 0, Math.PI * 2); g.fill(); g.stroke();
       }
       g.restore();
+      return;
+    }
+    if (tool.value === "pin") {
+      const l = p.layers.find((x) => x.id === selected.value);
+      if (l && l.visible) {
+        const h = handlesOf(p, l, S);
+        if (h) { g.save(); g.setLineDash([4, 4]); g.strokeStyle = accent; g.lineWidth = 1; g.globalAlpha = .7; g.beginPath(); h.corners.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.closePath(); g.stroke(); g.restore(); }
+        for (const q of pinsOf(l, S)) {
+          const moved = Math.hypot(q.dst[0] - q.rest[0], q.dst[1] - q.rest[1]) > 0.5;
+          g.fillStyle = moved ? accent : "#ffcf33"; g.strokeStyle = "rgba(20,24,33,.85)"; g.lineWidth = 2;
+          g.beginPath(); g.arc(q.scr[0], q.scr[1], 7, 0, Math.PI * 2); g.fill(); g.stroke();
+          g.fillStyle = "rgba(20,24,33,.85)"; g.beginPath(); g.arc(q.scr[0], q.scr[1], 2, 0, Math.PI * 2); g.fill();
+        }
+      }
       return;
     }
     if (tool.value === "pivot") {
@@ -153,9 +197,10 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
 
   function startDrag(x: number, y: number, e: PointerEvent) {
     const s = st.current, p = project.value!;
-    const S = (s.solved = solve(p, frame.value)), cur = tool.value as Tool; // fresh: the last paint may be behind
+    const S = (s.solved = solveShown(p, frame.value)), cur = tool.value as Tool; // fresh: the last paint may be behind
     if (cur === "hand" || e.button === 1 || s.space) { s.drag = { k: "pan", sx: x, sy: y, ox: s.ox, oy: s.oy }; return; }
     const sel = p.layers.find((l) => l.id === selected.value);
+    if (cur === "pin") return pinDown(sel, x, y, e);
     if (sel && sel.visible && !sel.locked) {
       const h = handlesOf(p, sel, S);
       if (h && cur === "pivot" && near(h.piv, x, y)) { begin(); s.drag = { k: "pivot", id: sel.id, inv: invert(S.world.get(sel.id)!) }; return; }
@@ -182,6 +227,38 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
     const pose = S.pose.get(hit.id)!, parentM = hit.parent ? S.world.get(hit.parent) : null;
     const inv = parentM ? invert([parentM[0], parentM[1], parentM[2], parentM[3], 0, 0]) : ([1, 0, 0, 1, 0, 0] as Mat);
     begin(); s.drag = { k: "move", id: hit.id, p0: toComp(x, y), x0: pose.x, y0: pose.y, inv };
+  }
+  /** Pin tool: press a pin to drag it (Alt / right button removes it); press the picture to add a pin. */
+  function pinDown(sel: Layer | undefined, x: number, y: number, e: PointerEvent) {
+    const s = st.current, S = s.solved!;
+    if (sel && sel.visible && !sel.locked) {
+      const hitPin = pinsOf(sel, S).find((q) => near(q.scr, x, y, 12));
+      if (hitPin) {
+        if (e.altKey || e.button === 2) { removePin(sel.id, hitPin.id); return; }
+        begin(); s.drag = { k: "pin", id: sel.id, pin: hitPin.id, inv: invert(S.world.get(sel.id)!), rx: hitPin.rest[0], ry: hitPin.rest[1] };
+        return;
+      }
+    }
+    const hit = pickLayer(x, y);
+    if (!hit) { selected.value = null; s.drag = { k: "pan", sx: x, sy: y, ox: s.ox, oy: s.oy }; return; }
+    if (hit.id !== selected.value) { selected.value = hit.id; return; } // first press picks the part
+    const at = apply(invert(S.world.get(hit.id)!), ...toComp(x, y)) as P;
+    const now = pinsOf(hit, S);
+    const rest = unpinPoint(now.map((q) => q.rest), now.map((q) => q.dst), at);
+    const id = uid();
+    edit((pp) => {
+      const l = pp.layers.find((q) => q.id === hit.id); if (!l) return;
+      (l.pins ??= []).push({ id, x: round2(rest[0]), y: round2(rest[1]) });
+      // an extra pin holds the picture where it is now, at every frame
+      l.base[pinChan(id, "x")] = round2(at[0] - rest[0]); l.base[pinChan(id, "y")] = round2(at[1] - rest[1]);
+    });
+  }
+  function removePin(id: string, pin: string) {
+    edit((pp) => {
+      const l = pp.layers.find((q) => q.id === id); if (!l?.pins) return;
+      l.pins = l.pins.filter((q) => q.id !== pin); if (!l.pins.length) delete l.pins;
+      for (const ax of ["x", "y"] as const) { delete l.tracks[pinChan(pin, ax)]; delete l.base[pinChan(pin, ax)]; }
+    });
   }
   function beginRotate(l: Layer, x: number, y: number) {
     const s = st.current, S = s.solved!, m = S.world.get(l.id)!;
@@ -210,7 +287,10 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
     const [cx, cy] = toComp(x, y);
     live((p) => {
       const l = p.layers.find((q) => q.id === (d.k === "ik" ? d.ids[0] : d.id)); if (!l) return;
-      if (d.k === "move") {
+      if (d.k === "pin") {
+        const [lx, ly] = apply(d.inv, cx, cy);
+        writeProp(l, pinChan(d.pin, "x"), round2(lx - d.rx)); writeProp(l, pinChan(d.pin, "y"), round2(ly - d.ry));
+      } else if (d.k === "move") {
         const [dx, dy] = apply(d.inv, cx - d.p0[0], cy - d.p0[1]);
         writeProp(l, "x", round2(d.x0 + dx)); writeProp(l, "y", round2(d.y0 + dy));
       } else if (d.k === "rotate") {
@@ -250,7 +330,7 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
       if ((!s.fitted || s.auto) && project.value) { s.fitted = true; fit(); } else schedule(); // keep fitting until the user zooms or pans
     });
     ro.observe(w);
-    const stop = effect(() => { rev.value; frame.value; selected.value; tool.value; mode.value; theme.value; schedule(); });
+    const stop = effect(() => { rev.value; frame.value; selected.value; tool.value; mode.value; theme.value; onion.value; schedule(); });
     let lastPid = project.value?.id;
     const stopFit = effect(() => { const id = project.value?.id; if (id !== lastPid) { lastPid = id; s.fitted = false; if (s.w) { s.fitted = true; fit(); } } });
     onAssetsChanged(schedule);
@@ -292,7 +372,17 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
       if (e.ctrlKey || e.metaKey || mouseWheel) zoomAt(Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)), x, y);
       else { s.auto = false; s.ox -= e.deltaX; s.oy -= e.deltaY; schedule(); }
     };
-    const dbl = (e: MouseEvent) => { const r = o.getBoundingClientRect(); if (!pickLayer(e.clientX - r.left, e.clientY - r.top)) fit(); };
+    const dbl = (e: MouseEvent) => {
+      const r = o.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+      if (tool.value === "pin") {
+        const p = project.value, sel = p?.layers.find((l) => l.id === selected.value);
+        const q = sel && s.solved ? pinsOf(sel, s.solved).find((z) => near(z.scr, x, y, 12)) : undefined;
+        if (q && sel) { removePin(sel.id, q.id); return; }
+      }
+      if (!pickLayer(x, y)) fit();
+    };
+    const ctx = (e: MouseEvent) => { if (tool.value === "pin") e.preventDefault(); };
+    o.addEventListener("contextmenu", ctx);
     const key = (e: KeyboardEvent) => { if (e.code === "Space" && !(e.target as HTMLElement)?.closest?.("input, textarea, select")) s.space = e.type === "keydown"; };
     o.addEventListener("pointerdown", down); o.addEventListener("pointermove", move);
     o.addEventListener("pointerup", up); o.addEventListener("pointercancel", up);
@@ -307,8 +397,8 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
   rev.value;
   const empty = !!p && p.layers.length === 0;
   const setBg = (bg: Background) => { if (p && p.bg !== bg) { begin(); live((pp) => (pp.bg = bg)); finish(); } };
-  const tools: Array<[Tool, string, string]> = [["move", "move", t("t_move")], ["rotate", "rotate", t("t_rotate")], ["pose", "figure", t("t_pose")], ["pivot", "pivot", t("t_pivot")], ["hand", "hand", t("t_hand")]];
-  const cursor = tool.value === "hand" ? "grab" : tool.value === "pivot" ? "crosshair" : "default";
+  const tools: Array<[Tool, string, string]> = [["move", "move", t("t_move")], ["rotate", "rotate", t("t_rotate")], ["pose", "figure", t("t_pose")], ["pin", "pin", t("t_pin")], ["pivot", "pivot", t("t_pivot")], ["hand", "hand", t("t_hand")]];
+  const cursor = tool.value === "hand" ? "grab" : tool.value === "pivot" || tool.value === "pin" ? "crosshair" : "default";
 
   return (
     <section class="stage" ref={wrap} aria-label="Canvas">

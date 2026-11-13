@@ -1,8 +1,14 @@
 // The saved shape of a TST Motion project. Times are whole frames.
 
-export type Ease = "smooth" | "linear" | "in" | "out" | "back" | "hold";
+export type Ease = "smooth" | "linear" | "in" | "out" | "back" | "hold" | "curve";
 export type Prop = "x" | "y" | "rot" | "sx" | "sy" | "o";
 export const PROPS: Prop[] = ["x", "y", "rot", "sx", "sy", "o"];
+/**
+ * Any value that can have keyframes: a Prop, or "turn" / "nod" (3D head turn, -1..1),
+ * "swap" (which picture is shown), or "pin:<id>:x" / "pin:<id>:y" (how far a pin was dragged).
+ */
+export type Chan = string;
+export const pinChan = (id: string, axis: "x" | "y") => `pin:${id}:${axis}`;
 
 export interface Key {
   /** frame number */
@@ -11,7 +17,27 @@ export interface Key {
   v: number;
   /** how the value travels from this key to the next one */
   e: Ease;
+  /** for e = "curve": speed curve as a CSS-style cubic-bezier (x1, y1, x2, y2) */
+  c?: [number, number, number, number];
 }
+
+/** A pin stuck into a picture (its own pixels). Dragging it bends the picture round the other pins. */
+export interface Pin { id: string; x: number; y: number }
+/** Sways by itself (hair, cloth): a spring that lags behind when the part it hangs from moves. */
+export interface Sway {
+  /** 0..2, how strongly it swings */
+  amt: number;
+  /** 0..1, 0 = loose and slow, 1 = stiff and quick */
+  stiff: number;
+  /** 0..1, how quickly it calms down */
+  damp: number;
+  /** 0..1, gentle swinging even when nothing moves */
+  wind: number;
+}
+/** 3D head turn: the picture is treated as a ball (centre cx,cy, radii rx,ry in its own pixels). */
+export interface Face { cx: number; cy: number; rx: number; ry: number }
+/** A saved pose: every part's values, by layer id. */
+export interface SavedPose { id: string; name: string; values: Record<string, Record<Chan, number>> }
 
 export interface Layer {
   id: string;
@@ -24,8 +50,8 @@ export interface Layer {
   px: number;
   py: number;
   /** setup pose, used by any property that has no keyframes */
-  base: Record<Prop, number>;
-  tracks: Partial<Record<Prop, Key[]>>;
+  base: Record<Prop, number> & { [ch: Chan]: number | undefined };
+  tracks: { [ch: Chan]: Key[] | undefined };
   visible: boolean;
   locked: boolean;
   /**
@@ -33,6 +59,15 @@ export interface Layer {
    * Near the joint it stays with the part it follows, further out it turns with this part. 0 or missing = stiff.
    */
   bend?: number;
+  /** pin warp (see Pin); offsets live in the "pin:<id>:x/y" values */
+  pins?: Pin[];
+  /** other pictures this part can switch to (eyes closed, mouth shapes); the "swap" value picks one */
+  swaps?: string[];
+  sway?: Sway;
+  /** this part can turn like a 3D head; its children shift by their depth */
+  face?: Face;
+  /** for a child of a 3D head: how far it sits in front (+) or behind (-) the face surface, in the head's pixels */
+  depth?: number;
 }
 
 export interface Asset {
@@ -62,6 +97,8 @@ export interface Project {
   /** draw order: index 0 is at the back */
   layers: Layer[];
   assets: Asset[];
+  /** pose library */
+  poses?: SavedPose[];
   created: number;
   modified: number;
 }

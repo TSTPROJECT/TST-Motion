@@ -3,7 +3,8 @@
 // encoded, and written to disk straight away, so even 4K × 105 s does not fill the RAM.
 import { Output, Mp4OutputFormat, WebMOutputFormat, StreamTarget, VideoSampleSource, VideoSample, QUALITY_HIGH, canEncodeVideo, type StreamTargetChunk } from "mediabunny";
 import type { Project } from "../model/types";
-import { solve, type Mat } from "../model/anim";
+import type { Mat } from "../model/anim";
+import { solveShown } from "../model/physics";
 import { createRenderer } from "../render/renderer";
 import { getAssetBlob } from "../io/assets";
 import { MovPngWriter, type Sink } from "./mov";
@@ -166,9 +167,9 @@ export async function runExport(project: Project, dir: FileSystemDirectoryHandle
     }
     for (let f = 0; f < total; f++) {
       if (signal.aborted) throw new DOMException("cancelled", "AbortError");
-      const S = solve(p, f);
-      rSee?.draw({ project: p, world: S.world, alpha: S.alpha, follow: S.follow, bg: "none" }, view, W, H);
-      rSolid?.draw({ project: p, world: S.world, alpha: S.alpha, follow: S.follow, bg: o.mp4Bg }, view, W, H);
+      const S = solveShown(p, f);
+      rSee?.draw({ project: p, world: S.world, alpha: S.alpha, follow: S.follow, deform: S.deform, pic: S.pic, bg: "none" }, view, W, H);
+      rSolid?.draw({ project: p, world: S.world, alpha: S.alpha, follow: S.follow, deform: S.deform, pic: S.pic, bg: o.mp4Bg }, view, W, H);
       for (const j of jobs) await j.frame(f, see, solid);
       onProgress({ frame: f + 1, total });
     }

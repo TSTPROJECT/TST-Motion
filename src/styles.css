@@ -98,6 +98,8 @@ button:disabled { cursor: default; opacity: .4; }
 .proj small::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
 .proj small.busy::before { background: var(--key); }
 .modeseg button[aria-pressed="true"].anim { color: var(--accent); }
+.levelseg button { padding: 0 9px; }
+.show-sm { display: none !important; }
 .menu-wrap { position: relative; }
 .menu { position: absolute; right: 0; top: 42px; z-index: 40; min-width: 230px; padding: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; }
 .menu button { display: flex; align-items: center; gap: 10px; height: 38px; border: 0; background: none; border-radius: 9px; padding: 0 10px; text-align: left; font-size: 13.5px; }
@@ -262,6 +264,7 @@ button:disabled { cursor: default; opacity: .4; }
   .scroll { max-height: none; }
   .tl-scroll { height: auto; max-height: 300px; }
   .hide-sm { display: none !important; }
+  .show-sm { display: flex !important; }
   .proj small { display: none; }
   .proj button { max-width: 16ch; }
   .tool span { display: none; }
@@ -348,3 +351,11 @@ button:disabled { cursor: default; opacity: .4; }
   .cw-tools .ibtn { width: 34px; height: 34px; }
   .cw-tip { display: none; }
 }
+
+/* on/off switch */
+.tgl { width: 34px; height: 20px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2); padding: 0; position: relative; flex: none; margin-left: auto; }
+.tgl i { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--muted); transition: left .15s, background .15s; }
+.tgl.on { background: var(--accent); border-color: var(--accent); }
+.tgl.on i { left: 16px; background: #fff; }
+.grp h3 button.tgl { border: 1px solid var(--line); background: var(--surface-2); padding: 0; }
+.grp h3 button.tgl.on { background: var(--accent); border-color: var(--accent); }

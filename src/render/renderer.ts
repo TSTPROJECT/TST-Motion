@@ -3,13 +3,21 @@
 import type { Mat } from "../model/anim";
 import type { Background, Project } from "../model/types";
 import { getLoaded } from "../io/assets";
+import { GRID } from "../model/warp";
 
 /** bg: override the project background. "none" = fully transparent (export), "#rrggbb" = any colour. */
 export interface Frame {
   project: Project; world: Map<string, Mat>; alpha: Map<string, number>; bg?: Background | "none" | string;
   /** soft joints (see Layer.bend): where each such picture would be without its own turn. The 2D fallback draws them stiff. */
   follow?: Map<string, Mat>;
+  /** bent pictures (pins, 3D turn): grid points in the picture's own pixels. The 2D fallback draws them unbent. */
+  deform?: Map<string, Float32Array>;
+  /** picture shown by each part (image swap); null = hidden; missing = the layer's own */
+  pic?: Map<string, string | null>;
+  /** onion skin: nearby frames drawn faintly in one colour, behind the current one */
+  ghosts?: Ghost[];
 }
+export interface Ghost { world: Map<string, Mat>; alpha: Map<string, number>; follow?: Map<string, Mat>; deform?: Map<string, Float32Array>; pic?: Map<string, string | null>; tint: [number, number, number]; k: number }
 export interface RendererOptions {
   /** keep the picture after drawing (needed when reading it back later, e.g. export) */
   preserve?: boolean;
@@ -22,19 +30,20 @@ export interface Renderer { draw(f: Frame, view: Mat, w: number, h: number): voi
 
 // Each picture is a fine grid, so a soft joint can bend it: points near the pivot go where the part it
 // follows would put them (mf), points further than "rad" go with the part itself (m), and in between blend.
+// A bent picture (pins, 3D turn) also sends where each grid point moved to ("d", in its own pixels).
 const VS = `#version 300 es
-in vec2 a; uniform mat3 m; uniform mat3 mf; uniform vec2 piv; uniform float rad; uniform vec2 size; uniform vec2 res; out vec2 uv;
+in vec2 a; in vec2 d; uniform int bent; uniform mat3 m; uniform mat3 mf; uniform vec2 piv; uniform float rad; uniform vec2 size; uniform vec2 res; out vec2 uv;
 void main(){
-  uv = a; vec2 q = a * size; vec3 p = m * vec3(q, 1.0);
-  if (rad > 0.0) { float w = 1.0 - smoothstep(0.0, rad, distance(q, piv)); p = mix(p, mf * vec3(q, 1.0), w); }
+  uv = a; vec2 q0 = a * size; vec2 q = bent == 1 ? d : q0; vec3 p = m * vec3(q, 1.0);
+  if (rad > 0.0) { float w = 1.0 - smoothstep(0.0, rad, distance(q0, piv)); p = mix(p, mf * vec3(q, 1.0), w); }
   gl_Position = vec4(p.x / res.x * 2.0 - 1.0, 1.0 - p.y / res.y * 2.0, 0.0, 1.0);
 }`;
-const GRID = 32;
 const FS = `#version 300 es
 precision highp float; in vec2 uv; uniform sampler2D tex; uniform int mode; uniform vec4 color; uniform float alpha; uniform vec2 size; out vec4 o;
 void main(){
   if (mode == 0) { o = texture(tex, uv) * alpha; }
   else if (mode == 1) { o = color; }
+  else if (mode == 3) { float k = texture(tex, uv).a * alpha; o = vec4(color.rgb * k, k); }
   else { vec2 c = floor(uv * size / 16.0); float k = mod(c.x + c.y, 2.0); o = vec4(mix(vec3(0.96), vec3(0.84), k), 1.0); }
 }`;
 
@@ -86,9 +95,11 @@ export function createRenderer(canvas: Canvas, opts: RendererOptions = {}): Rend
   const ibuf = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibuf); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
   const mesh = () => gl.drawElements(gl.TRIANGLES, idx.length, gl.UNSIGNED_SHORT, 0);
   const loc = gl.getAttribLocation(prog, "a"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  const dbuf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, dbuf); gl.bufferData(gl.ARRAY_BUFFER, verts.byteLength, gl.DYNAMIC_DRAW);
+  const dloc = gl.getAttribLocation(prog, "d"); gl.enableVertexAttribArray(dloc); gl.vertexAttribPointer(dloc, 2, gl.FLOAT, false, 0, 0);
   const U = (n: string) => gl.getUniformLocation(prog, n);
   const uM = U("m"), uSize = U("size"), uRes = U("res"), uMode = U("mode"), uColor = U("color"), uAlpha = U("alpha");
-  const uMf = U("mf"), uPiv = U("piv"), uRad = U("rad");
+  const uMf = U("mf"), uPiv = U("piv"), uRad = U("rad"), uBent = U("bent");
   gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   const textures = new Map<string, { tex: WebGLTexture; bmp: ImageBitmap }>();
 
@@ -114,7 +125,7 @@ export function createRenderer(canvas: Canvas, opts: RendererOptions = {}): Rend
   return {
     kind: "webgl",
     forget(id) { const t = textures.get(id); if (t) { gl.deleteTexture(t.tex); textures.delete(id); } },
-    draw({ project: p, world, alpha, bg, follow }, view, w, h) {
+    draw({ project: p, world, alpha, bg, follow, deform, pic, ghosts }, view, w, h) {
       gl.viewport(0, 0, w, h); gl.uniform1f(uRad, 0);
       gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
       gl.uniform2f(uRes, w, h);
@@ -126,19 +137,35 @@ export function createRenderer(canvas: Canvas, opts: RendererOptions = {}): Rend
         else { gl.uniform1i(uMode, 1); gl.uniform4f(uColor, back[0], back[1], back[2], 1); }
         mesh();
       }
+      gl.uniform1i(uBent, 0);
+      for (const g of ghosts ?? []) {
+        gl.uniform1i(uMode, 3); gl.uniform4f(uColor, g.tint[0], g.tint[1], g.tint[2], 1);
+        layers(g, g.k);
+      }
       gl.uniform1i(uMode, 0);
-      for (const l of p.layers) {
-        if (!l.visible || !l.asset) continue;
-        const a = p.assets.find((x) => x.id === l.asset); const tex = a && texFor(a.id); const op = alpha.get(l.id) ?? 1;
-        if (!a || !tex || op <= 0) continue;
-        const m = world.get(l.id)!;
-        gl.bindTexture(gl.TEXTURE_2D, tex);
-        gl.uniformMatrix3fv(uM, false, m3(mulView(view, m)));
-        gl.uniform2f(uSize, a.w, a.h); gl.uniform1f(uAlpha, op);
-        const f = l.bend && l.bend > 0 ? follow?.get(l.id) : undefined;
-        if (f) { gl.uniformMatrix3fv(uMf, false, m3(mulView(view, f))); gl.uniform2f(uPiv, l.px, l.py); gl.uniform1f(uRad, l.bend!); }
-        else gl.uniform1f(uRad, 0);
-        mesh();
+      layers({ world, alpha, follow, deform, pic }, 1);
+
+      function layers(F: { world: Map<string, Mat>; alpha: Map<string, number>; follow?: Map<string, Mat>; deform?: Map<string, Float32Array>; pic?: Map<string, string | null> }, k: number) {
+        for (const l of p.layers) {
+          if (!l.visible) continue;
+          const id = F.pic?.has(l.id) ? F.pic.get(l.id)! : l.asset; if (!id) continue;
+          const a = p.assets.find((x) => x.id === id); const tex = a && texFor(a.id); const op = (F.alpha.get(l.id) ?? 1) * k;
+          if (!a || !tex || op <= 0) continue;
+          let m = F.world.get(l.id)!;
+          // a swapped picture of another size sits centred where the part's own picture is
+          const own = id !== l.asset ? p.assets.find((x) => x.id === l.asset) : undefined;
+          if (own && (own.w !== a.w || own.h !== a.h)) m = mulView(m, [1, 0, 0, 1, (own.w - a.w) / 2, (own.h - a.h) / 2]);
+          gl!.bindTexture(gl!.TEXTURE_2D, tex);
+          gl!.uniformMatrix3fv(uM, false, m3(mulView(view, m)));
+          gl!.uniform2f(uSize, a.w, a.h); gl!.uniform1f(uAlpha, op);
+          const f = l.bend && l.bend > 0 ? F.follow?.get(l.id) : undefined;
+          if (f) { gl!.uniformMatrix3fv(uMf, false, m3(mulView(view, f))); gl!.uniform2f(uPiv, l.px, l.py); gl!.uniform1f(uRad, l.bend!); }
+          else gl!.uniform1f(uRad, 0);
+          const dg = id === l.asset ? F.deform?.get(l.id) : undefined;
+          if (dg) { gl!.bindBuffer(gl!.ARRAY_BUFFER, dbuf); gl!.bufferSubData(gl!.ARRAY_BUFFER, 0, dg); gl!.uniform1i(uBent, 1); }
+          mesh();
+          if (dg) gl!.uniform1i(uBent, 0);
+        }
       }
     },
   };
@@ -155,7 +182,7 @@ export function create2d(canvas: Canvas, opts: RendererOptions = {}): Renderer {
   return {
     kind: "2d",
     forget() {},
-    draw({ project: p, world, alpha, bg }, view, w, h) {
+    draw({ project: p, world, alpha, bg, pic }, view, w, h) {
       g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, w, h);
       g.setTransform(...view);
       const back = bgColor(bg ?? p.bg);
@@ -165,10 +192,13 @@ export function create2d(canvas: Canvas, opts: RendererOptions = {}): Renderer {
       } else if (back) g.fillStyle = css(back);
       if (back) g.fillRect(0, 0, p.w, p.h);
       for (const l of p.layers) {
-        if (!l.visible || !l.asset) continue;
-        const a = p.assets.find((x) => x.id === l.asset); const bmp = a && image(a.id);
+        const id = pic?.has(l.id) ? pic.get(l.id)! : l.asset;
+        if (!l.visible || !id) continue;
+        const a = p.assets.find((x) => x.id === id); const bmp = a && image(a.id);
         if (!a || !bmp) continue;
-        g.setTransform(...mulView(view, world.get(l.id)!)); g.globalAlpha = alpha.get(l.id) ?? 1;
+        const own = id !== l.asset ? p.assets.find((x) => x.id === l.asset) : undefined;
+        const m = own && (own.w !== a.w || own.h !== a.h) ? mulView(world.get(l.id)!, [1, 0, 0, 1, (own.w - a.w) / 2, (own.h - a.h) / 2]) : world.get(l.id)!;
+        g.setTransform(...mulView(view, m)); g.globalAlpha = alpha.get(l.id) ?? 1;
         g.drawImage(bmp, 0, 0, a.w, a.h);
       }
       g.globalAlpha = 1;

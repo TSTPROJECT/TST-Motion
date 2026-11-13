@@ -1,7 +1,7 @@
 // The editing screen: top bar, layers, canvas, properties, timeline.
 import { useEffect, useState } from "preact/hooks";
 import { effect } from "@preact/signals";
-import { project, rev, frame, playing, loop, selected, mode, tool, tab, canUndo, canRedo, undo, redo, addLayers, edit, deleteLayer, duplicateLayer, toggleKeys, closeProject, type Mode, type Tab } from "../model/store";
+import { project, rev, frame, playing, loop, selected, mode, tool, tab, advanced, setAdvanced, canUndo, canRedo, undo, redo, addLayers, edit, deleteLayer, duplicateLayer, toggleKeys, closeProject, type Mode, type Tab } from "../model/store";
 import { importFiles, isProjectFile, ACCEPT } from "../io/assets";
 import { exportProjectFile, safeFileName, saveBlobAs } from "../io/projectFile";
 import { saving, saveNow } from "../io/autosave";
@@ -112,6 +112,7 @@ export function Editor() {
       else if (key === "v") tool.value = "move";
       else if (key === "r") tool.value = "rotate";
       else if (key === "i") tool.value = "pose";
+      else if (key === "n") tool.value = "pin";
       else if (key === "p") tool.value = "pivot";
       else if (key === "h") tool.value = "hand";
       else if (key === "c") openCut();
@@ -143,6 +144,10 @@ export function Editor() {
           <button aria-pressed={mode.value === "setup"} title={t("mode_setup_hint")} onClick={() => setMode("setup")}>{t("mode_setup")}</button>
           <button class="anim" aria-pressed={mode.value === "animate"} title={t("mode_animate_hint")} onClick={() => setMode("animate")}>{t("mode_animate")}</button>
         </div>
+        <div class="seg levelseg hide-sm" role="group" aria-label={t("ui_adv")}>
+          <button aria-pressed={!advanced.value} title={t("ui_easy_hint")} onClick={() => { setAdvanced(false); toast(t("ui_easy_hint")); }}>{t("ui_easy")}</button>
+          <button aria-pressed={advanced.value} title={t("ui_adv_hint")} onClick={() => { setAdvanced(true); toast(t("ui_adv_hint")); }}>{t("ui_adv")}</button>
+        </div>
         <button class="ibtn ghost" title={t("undo")} aria-label={t("undo")} disabled={!canUndo.value} onClick={undo}><Icon n="undo" /></button>
         <button class="ibtn ghost hide-sm" title={t("redo")} aria-label={t("redo")} disabled={!canRedo.value} onClick={redo}><Icon n="redo" /></button>
         <button class="btn hide-sm" onClick={pickImages}><Icon n="import" />{t("import")}</button>
@@ -163,6 +168,7 @@ export function Editor() {
                 <button onClick={() => (settingsOpen.value = true)}><Icon n="settings" />{t("settings")}</button>
                 {!installed.value && (installPrompt.value || isIos) && <button onClick={async () => { if (installPrompt.value) await install(); else toast(t("install_ios")); }}><Icon n="install" />{t("install")}</button>}
                 <hr />
+                <button class="show-sm" onClick={() => setAdvanced(!advanced.value)}><Icon n="settings" />{advanced.value ? t("ui_easy") : t("ui_adv")}</button>
                 <div class="row" onClick={(e) => e.stopPropagation()}><TopToggles /></div>
                 <button onClick={goHome}><Icon n="home" />{t("home")}</button>
               </div>
