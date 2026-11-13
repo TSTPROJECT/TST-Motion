@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "TST Motion",
   "mainBinaryName": "TST Motion",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "identifier": "app.tstmotion.desktop",
   "build": {
     "frontendDist": "../dist",

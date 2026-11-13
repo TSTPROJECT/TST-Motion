@@ -27,10 +27,14 @@ export async function addTextLayer() {
 // changes to one text are drawn one after another, so a slow draw never overwrites a newer one
 let chain: Promise<void> = Promise.resolve();
 /** Change a text's words or look. Its picture is redrawn; the pivot keeps its place within the text. */
+/** Brightness of a #rrggbb colour, 0..1. */
+const lum = (hex: string) => { const n = parseInt(hex.replace("#", "").padEnd(6, "0").slice(0, 6), 16); return (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255; };
 export function setText(id: string, patch: Partial<TextStyle>) {
   chain = chain.then(async () => {
     const p = project.value, l = p?.layers.find((x) => x.id === id); if (!p || !l?.text) return;
     const st: TextStyle = { ...l.text, ...patch };
+    // a new text colour too close to the outline would turn the letters into blobs: flip the outline
+    if (patch.color && !patch.strokeColor && st.stroke > 0 && Math.abs(lum(st.color) - lum(st.strokeColor)) < 0.35) st.strokeColor = lum(st.color) > 0.5 ? "#151821" : "#ffffff";
     if (JSON.stringify(st) === JSON.stringify(l.text)) return;
     const old = p.assets.find((a) => a.id === l.asset);
     const r = await renderText(st);
