@@ -5,7 +5,7 @@ import { PROPS, MAX_SECONDS } from "./types";
 import { apply, decompose, invert, localMatrix, mul, poseAt, solve, valueAt, wouldCycle, IDENTITY } from "./anim";
 
 export type Mode = "setup" | "animate";
-export type Tool = "move" | "rotate" | "pivot" | "hand";
+export type Tool = "move" | "rotate" | "pose" | "pivot" | "hand";
 export type Tab = "tl" | "layers" | "props";
 
 export const project = signal<Project | null>(null);
@@ -256,6 +256,8 @@ export interface Piece {
   pivot?: [number, number];
   /** index (in the same list) of the piece this one follows, e.g. forearm → upper arm */
   parent?: number;
+  /** soft joint radius in pixels (see Layer.bend) */
+  bend?: number;
 }
 
 /**
@@ -265,6 +267,7 @@ export interface Piece {
 function pieceLayer(from: Layer, piece: Piece): Layer {
   const l: Layer = JSON.parse(JSON.stringify(from));
   l.id = uid(); l.name = piece.name.slice(0, 60); l.asset = piece.asset.id;
+  if (piece.bend && piece.bend > 0) l.bend = Math.round(piece.bend); else delete l.bend;
   l.px = from.px - piece.x; l.py = from.py - piece.y; // same place on screen
   if (piece.pivot) setPivotKeepPlace(l, piece.pivot[0] - piece.x, piece.pivot[1] - piece.y);
   else setPivotKeepPlace(l, piece.asset.w / 2, piece.asset.h / 2);

@@ -34,11 +34,12 @@ const th = {
   mode_setup: "จัดท่า", mode_animate: "ขยับ",
   mode_setup_hint: "โหมดจัดท่า: จัดวางชิ้นส่วน ตั้งจุดหมุน และเลือกว่าชิ้นไหนติดกับชิ้นไหน ไม่สร้างคีย์เฟรม",
   mode_animate_hint: "โหมดขยับ: เลื่อนเวลาไปจุดที่ต้องการ แล้วลากชิ้นส่วน ระบบใส่คีย์เฟรมให้เอง",
-  t_move: "ย้าย", t_rotate: "หมุน", t_pivot: "จุดหมุน", t_hand: "เลื่อนจอ", fit: "พอดีจอ",
+  t_move: "ย้าย", t_rotate: "หมุน", t_pose: "จัดท่า", g_bend: "ข้อต่อนุ่ม", p_bend: "ระยะโค้ง", bend_hint: "ภาพรอบจุดหมุนจะโค้งงอตามชิ้นแม่ แทนการหักเป็นมุม 0 = แข็ง ใส่ประมาณความกว้างของแขนหรือขา", t_pivot: "จุดหมุน", t_hand: "เลื่อนจอ", fit: "พอดีจอ",
   tip_move: "ลากชิ้นส่วนเพื่อย้าย ลากมุมเพื่อย่อขยาย ลากจุดด้านบนเพื่อหมุน",
   tip_rotate: "ลากที่ชิ้นส่วนเพื่อหมุนรอบจุดหมุน",
   tip_pivot: "ลากเพื่อย้ายจุดหมุน (ข้อต่อ) ภาพไม่ขยับตาม",
   tip_hand: "ลากเพื่อเลื่อนจอ หมุนล้อเมาส์หรือใช้สองนิ้วเพื่อซูม",
+  tip_pose: "ลากชิ้นส่วนเพื่อจัดท่า ชิ้นข้างบนจะงอตาม เช่น ลากแขนท่อนล่าง ข้อศอกจะงอและต้นแขนหมุนตาม",
   layers: "เลเยอร์", props: "คุณสมบัติ", timeline: "ไทม์ไลน์",
   empty_title: "เริ่มจากนำรูปเข้ามา", empty_body: "ลากรูปมาวางตรงนี้ หรือกดปุ่มด้านล่าง ได้ทีละหลายรูป รองรับ PNG, JPG, WebP, GIF, BMP, AVIF, SVG และ PSD แบบแยกเลเยอร์",
   drop_here: "วางรูปเพื่อนำเข้า",
@@ -58,7 +59,7 @@ const th = {
   s_name: "ชื่องาน", s_size: "ขนาดจอ (พิกเซล)", s_fps: "เฟรมต่อวินาที", s_length: "ความยาว (วินาที, สูงสุด {max})", s_bg: "พื้นหลัง",
   bg_alpha: "ใส", bg_green: "เขียว", bg_white: "ขาว", bg_black: "ดำ", width: "กว้าง", height: "สูง",
   file_saved: "บันทึกไฟล์แล้ว", open_failed: "เปิดไฟล์โปรเจกต์ไม่ได้", missing_images: "หารูปบางรูปไม่เจอ: {names}",
-  shortcuts: "ทางลัด: Space เล่น/หยุด · ←/→ ทีละเฟรม · K คีย์เฟรม · V ย้าย · R หมุน · P จุดหมุน · H เลื่อนจอ · Ctrl+Z ย้อนกลับ · Ctrl+S บันทึกไฟล์ · Ctrl+E ส่งออกวิดีโอ · C ตัดชิ้นส่วน",
+  shortcuts: "ทางลัด: Space เล่น/หยุด · ←/→ ทีละเฟรม · K คีย์เฟรม · V ย้าย · R หมุน · I จัดท่า · P จุดหมุน · H เลื่อนจอ · Ctrl+Z ย้อนกลับ · Ctrl+S บันทึกไฟล์ · Ctrl+E ส่งออกวิดีโอ · C ตัดชิ้นส่วน",
   storage_note: "งานทั้งหมดเก็บในเครื่องนี้เท่านั้น ถ้าจะย้ายเครื่อง ให้กด \"บันทึกเป็นไฟล์\"",
   ai_level: "ขนาดชิ้นที่ AI เลือก", ai_level_0: "เล็ก", ai_level_1: "กลาง", ai_level_2: "ใหญ่",
   ai_level_0_tip: "ละเอียด: เลือกเฉพาะส่วนย่อยตรงที่แตะ เช่น แขนเสื้อ", ai_level_1_tip: "ปกติ: เลือกทั้งชิ้น เช่น แขนทั้งแขน", ai_level_2_tip: "หยาบ: เลือกก้อนใหญ่ เช่น เสื้อผ้าทั้งชุด",
@@ -103,7 +104,7 @@ const th = {
   cut_bg_done: "ลบพื้นหลังแล้ว", cut_one_piece: "ภาพนี้มีชิ้นเดียว ไม่มีอะไรให้แยก", cut_one_piece_auto: "ภาพนี้ติดกันเป็นชิ้นเดียว เลยเปิด \"แยกชิ้นอัตโนมัติ\" ให้ กด \"เดาชิ้นส่วนให้\" เพื่อแยกหัว แขน ขา", cut_auto_btn: "แยกหัว แขน ขา อัตโนมัติ", cut_many_pieces: "ภาพนี้แยกได้ {n} ชิ้น มากเกินไป ลองลบพื้นหลังหรือจุดเล็กๆ ก่อน",
   cut_split_done: "แยกเป็น {n} เลเยอร์แล้ว", cut_done: "ตัด \"{name}\" เป็นเลเยอร์ใหม่แล้ว", cut_copied: "คัดลอก \"{name}\" เป็นเลเยอร์ใหม่แล้ว",
   cut_no_image: "เปิดรูปของชิ้นนี้ไม่ได้", cut_too_big: "รูปใหญ่เกินไป (เกิน 50 ล้านพิกเซล) ย่อรูปก่อนแล้วนำเข้าใหม่", cut_need_image: "เลือกชิ้นที่มีรูปก่อน",
-  phase_note: "เวอร์ชันทดลอง (เฟส 3)",
+  phase_note: "เวอร์ชันทดลอง (เฟส 4)",
 };
 export type Key = keyof typeof th;
 const en: Record<Key, string> = {
@@ -130,11 +131,12 @@ const en: Record<Key, string> = {
   mode_setup: "Setup", mode_animate: "Animate",
   mode_setup_hint: "Setup mode: place parts, set pivots and choose which part follows which. No keyframes are made.",
   mode_animate_hint: "Animate mode: move the time to a frame, then drag a part. Keyframes are added for you.",
-  t_move: "Move", t_rotate: "Rotate", t_pivot: "Pivot", t_hand: "Pan", fit: "Fit",
+  t_move: "Move", t_rotate: "Rotate", t_pose: "Pose", g_bend: "Soft joint", p_bend: "Bend size", bend_hint: "The picture round the pivot bends with the part it follows instead of folding sharply. 0 = stiff. Try about the width of the arm or leg.", t_pivot: "Pivot", t_hand: "Pan", fit: "Fit",
   tip_move: "Drag a part to move it, a corner to resize, the top dot to rotate",
   tip_rotate: "Drag a part to rotate it around its pivot",
   tip_pivot: "Drag to move the pivot (joint). The picture stays put.",
   tip_hand: "Drag to pan. Mouse wheel or two fingers to zoom.",
+  tip_pose: "Drag a part to pose it; the part above bends along. Pull a forearm and the elbow bends and the upper arm swings.",
   layers: "Layers", props: "Properties", timeline: "Timeline",
   empty_title: "Start by bringing in pictures", empty_body: "Drop images here or use the button below, several at once. PNG, JPG, WebP, GIF, BMP, AVIF, SVG and layered PSD.",
   drop_here: "Drop to import",
@@ -154,7 +156,7 @@ const en: Record<Key, string> = {
   s_name: "Name", s_size: "Frame size (pixels)", s_fps: "Frames per second", s_length: "Length (seconds, up to {max})", s_bg: "Background",
   bg_alpha: "Clear", bg_green: "Green", bg_white: "White", bg_black: "Black", width: "Width", height: "Height",
   file_saved: "File saved", open_failed: "Couldn't open that project file", missing_images: "Some images are missing: {names}",
-  shortcuts: "Shortcuts: Space play/pause · ←/→ step · K keyframe · V move · R rotate · P pivot · H pan · Ctrl+Z undo · Ctrl+S save file · Ctrl+E export video · C cut parts",
+  shortcuts: "Shortcuts: Space play/pause · ←/→ step · K keyframe · V move · R rotate · I pose · P pivot · H pan · Ctrl+Z undo · Ctrl+S save file · Ctrl+E export video · C cut parts",
   storage_note: "Projects stay on this device only. To move to another device, use \"Save as file\".",
   ai_level: "Size of the AI pick", ai_level_0: "Small", ai_level_1: "Medium", ai_level_2: "Large",
   ai_level_0_tip: "Fine: just the bit you tap, e.g. a sleeve", ai_level_1_tip: "Normal: the whole part, e.g. an arm", ai_level_2_tip: "Coarse: a big piece, e.g. the whole outfit",
@@ -199,7 +201,7 @@ const en: Record<Key, string> = {
   cut_bg_done: "Background removed", cut_one_piece: "This picture is one piece; nothing to split", cut_one_piece_auto: "This picture is all one piece, so \"Auto parts\" is open: press \"Guess the parts\" to split head, arms and legs", cut_auto_btn: "Split head, arms, legs automatically", cut_many_pieces: "This picture splits into {n} pieces, too many. Remove the background or specks first",
   cut_split_done: "Split into {n} layers", cut_done: "Cut \"{name}\" into a new layer", cut_copied: "Copied \"{name}\" into a new layer",
   cut_no_image: "Couldn't open this part's picture", cut_too_big: "Picture too large (over 50 megapixels). Make it smaller and import again", cut_need_image: "Pick a part with a picture first",
-  phase_note: "Preview build (phase 3)",
+  phase_note: "Preview build (phase 4)",
 };
 const dict = { th, en };
 export function t(k: Key, vars?: Record<string, string | number>) {

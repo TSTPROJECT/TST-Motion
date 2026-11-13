@@ -28,6 +28,11 @@ export interface Layer {
   tracks: Partial<Record<Prop, Key[]>>;
   visible: boolean;
   locked: boolean;
+  /**
+   * Soft joint: how far (image pixels) round the pivot the picture bends instead of turning stiffly.
+   * Near the joint it stays with the part it follows, further out it turns with this part. 0 or missing = stiff.
+   */
+  bend?: number;
 }
 
 export interface Asset {

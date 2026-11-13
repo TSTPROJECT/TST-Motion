@@ -65,3 +65,17 @@ test("keyFrames merges frames from every track", () => {
   const l = layer("a", { tracks: { x: [{ f: 0, v: 0, e: "linear" }, { f: 10, v: 1, e: "linear" }], rot: [{ f: 10, v: 0, e: "linear" }, { f: 5, v: 0, e: "linear" }] } });
   assert.deepEqual(keyFrames(l), [0, 5, 10]);
 });
+
+test("a soft joint knows where the part would be without its own turn", () => {
+  const a = layer("a", { base: { x: 50, y: 50, rot: 30, sx: 1, sy: 1, o: 1 } });
+  const b = layer("b", { parent: "a", bend: 20, base: { x: 10, y: 0, rot: 0, sx: 1, sy: 1, o: 1 }, tracks: { rot: [{ f: 0, v: 45, e: "linear" }] } });
+  const S = solve(proj([a, b]), 0);
+  const f = S.follow.get("b")!, w = S.world.get("b")!;
+  // the joint itself sits in the same place either way
+  const pf = apply(f, b.px, b.py), pw = apply(w, b.px, b.py);
+  assert.ok(Math.hypot(pf[0] - pw[0], pf[1] - pw[1]) < 1e-9);
+  // without its own 45° turn, the follow matrix turns only with the parent (30°)
+  assert.ok(Math.abs(Math.atan2(f[1], f[0]) * 180 / Math.PI - 30) < 1e-9);
+  assert.ok(Math.abs(Math.atan2(w[1], w[0]) * 180 / Math.PI - 75) < 1e-9);
+  assert.equal(S.follow.has("a"), false);
+});

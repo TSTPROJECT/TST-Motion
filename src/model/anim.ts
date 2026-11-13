@@ -75,12 +75,16 @@ export function localMatrix(p: Pose, px: number, py: number): Mat {
   return [a, b, c, d, p.x - (a * px + c * py), p.y - (b * px + d * py)];
 }
 
-export interface Solved { world: Map<string, Mat>; alpha: Map<string, number>; pose: Map<string, Pose> }
+export interface Solved {
+  world: Map<string, Mat>; alpha: Map<string, number>; pose: Map<string, Pose>;
+  /** for parts with a soft joint: where the picture would be if it had not turned from its setup pose (follows the parent only) */
+  follow: Map<string, Mat>;
+}
 
 /** World matrices (layer image -> composition pixels) and combined opacity for every layer. */
 export function solve(project: Project, frame: number): Solved {
   const byId = new Map(project.layers.map((l) => [l.id, l]));
-  const world = new Map<string, Mat>(), alpha = new Map<string, number>(), pose = new Map<string, Pose>();
+  const world = new Map<string, Mat>(), alpha = new Map<string, number>(), pose = new Map<string, Pose>(), follow = new Map<string, Mat>();
   const visiting = new Set<string>();
   const visit = (l: Layer): void => {
     if (world.has(l.id)) return;
@@ -92,6 +96,7 @@ export function solve(project: Project, frame: number): Solved {
       visiting.add(l.id);
       visit(parent);
       visiting.delete(l.id);
+      if (l.bend && l.bend > 0) follow.set(l.id, mul(world.get(parent.id)!, localMatrix({ ...l.base, x: p.x, y: p.y }, l.px, l.py)));
       m = mul(world.get(parent.id)!, m);
       a *= alpha.get(parent.id)!;
     }
@@ -99,7 +104,7 @@ export function solve(project: Project, frame: number): Solved {
     alpha.set(l.id, a);
   };
   project.layers.forEach(visit);
-  return { world, alpha, pose };
+  return { world, alpha, pose, follow };
 }
 
 export const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);

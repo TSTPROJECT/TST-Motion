@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { effect } from "@preact/signals";
 import { project, rev, frame, selected, tool, mode, begin, live, finish, writeProp, movePivotLive, type Tool } from "../model/store";
 import { solve, apply, invert, mul, type Mat, type Solved } from "../model/anim";
+import { pull } from "../model/ik";
 import type { Background, Layer, Project } from "../model/types";
 import { createRenderer, type Renderer } from "../render/renderer";
 import { hitAsset, onAssetsChanged } from "../io/assets";
@@ -15,7 +16,9 @@ type Drag =
   | { k: "move"; id: string; p0: [number, number]; x0: number; y0: number; inv: Mat }
   | { k: "rotate"; id: string; c: [number, number]; last: number; acc: number; r0: number; sign: number }
   | { k: "scale"; id: string; ref: [number, number]; d0: number; sx0: number; sy0: number }
-  | { k: "pivot"; id: string; inv: Mat };
+  | { k: "pivot"; id: string; inv: Mat }
+  /** pose: the held part (and the one above it) turn so the held point follows the pointer */
+  | { k: "ik"; ids: string[]; r0: number[]; sign: number[]; j1: [number, number]; j2: [number, number] | null; e0: [number, number] };
 
 const HANDLE = 22; // touch-friendly hit radius in CSS px
 
@@ -50,7 +53,7 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
     if (!s.renderer) s.renderer = createRenderer(c);
     s.solved = solve(p, frame.value);
     const dv: Mat = mul([s.dpr, 0, 0, s.dpr, 0, 0], view());
-    s.renderer.draw({ project: p, world: s.solved.world, alpha: s.solved.alpha }, dv, c.width, c.height);
+    s.renderer.draw({ project: p, world: s.solved.world, alpha: s.solved.alpha, follow: s.solved.follow }, dv, c.width, c.height);
     drawOverlay(p, s.solved);
   }
 
@@ -79,6 +82,25 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
     g.beginPath(); g.rect(0, 0, s.w, s.h); g.rect(fx, fy, fw, fh); g.fill("evenodd");
     g.strokeStyle = css.getPropertyValue("--line-2").trim(); g.lineWidth = 1; g.strokeRect(fx + 0.5, fy + 0.5, fw - 1, fh - 1);
 
+    if (tool.value === "pose") {
+      // the skeleton: a line from each joint to the joint of the part it follows
+      g.save(); g.lineCap = "round";
+      for (const l of p.layers) {
+        if (!l.visible || !l.parent) continue;
+        const par = p.layers.find((x) => x.id === l.parent); if (!par || !par.visible) continue;
+        const [x, y] = screenOf(S.world.get(l.id)!, l.px, l.py), [qx, qy] = screenOf(S.world.get(par.id)!, par.px, par.py);
+        g.strokeStyle = "rgba(20,24,33,.55)"; g.lineWidth = 5; g.beginPath(); g.moveTo(qx, qy); g.lineTo(x, y); g.stroke();
+        g.strokeStyle = l.id === selected.value || par.id === selected.value ? accent : "rgba(255,255,255,.9)"; g.lineWidth = 2.5; g.stroke();
+      }
+      for (const l of p.layers) {
+        if (!l.visible) continue;
+        const [x, y] = screenOf(S.world.get(l.id)!, l.px, l.py);
+        g.fillStyle = l.id === selected.value ? accent : "#fff"; g.strokeStyle = "rgba(20,24,33,.8)"; g.lineWidth = 1.5;
+        g.beginPath(); g.arc(x, y, 4.5, 0, Math.PI * 2); g.fill(); g.stroke();
+      }
+      g.restore();
+      return;
+    }
     if (tool.value === "pivot") {
       for (const l of p.layers) {
         if (!l.visible || l.id === selected.value) continue;
@@ -152,6 +174,7 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
     if (!hit) { selected.value = null; s.drag = { k: "pan", sx: x, sy: y, ox: s.ox, oy: s.oy }; return; }
     selected.value = hit.id;
     if (cur === "rotate") return beginRotate(hit, x, y);
+    if (cur === "pose" && hit.parent) return beginPose(hit, x, y);
     if (cur === "pivot") {
       begin(); const inv = invert(S.world.get(hit.id)!); s.drag = { k: "pivot", id: hit.id, inv };
       const [lx, ly] = apply(inv, ...toComp(x, y)); movePivotLive(hit.id, lx, ly); return;
@@ -166,12 +189,27 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
     const sign = parentM && parentM[0] * parentM[3] - parentM[1] * parentM[2] < 0 ? -1 : 1;
     begin(); s.drag = { k: "rotate", id: l.id, c, last: Math.atan2(pt[1] - c[1], pt[0] - c[0]), acc: 0, r0: S.pose.get(l.id)!.rot, sign };
   }
+  /** Pose: hold a part; it turns round its joint, and when the part above it is not the root (the body),
+   *  that one turns too, so pulling a forearm bends the elbow and swings the upper arm. */
+  function beginPose(l: Layer, x: number, y: number) {
+    const s = st.current, S = s.solved!, p = project.value!;
+    const byId = (id: string | null) => (id ? p.layers.find((q) => q.id === id) ?? null : null);
+    const mirror = (id: string | null) => { const m = id ? S.world.get(id) : null; return m && m[0] * m[3] - m[1] * m[2] < 0 ? -1 : 1; };
+    const par = byId(l.parent), two = !!par && !!par.parent && !par.locked;
+    const pivotOf = (q: Layer) => apply(S.world.get(q.id)!, q.px, q.py);
+    const chain = two ? [l, par!] : [l];
+    begin();
+    s.drag = {
+      k: "ik", ids: chain.map((q) => q.id), r0: chain.map((q) => S.pose.get(q.id)!.rot), sign: chain.map((q) => mirror(q.parent)),
+      j1: two ? pivotOf(par!) : pivotOf(l), j2: two ? pivotOf(l) : null, e0: toComp(x, y),
+    };
+  }
   function moveDrag(x: number, y: number, e: PointerEvent) {
     const s = st.current, d = s.drag; if (!d) return;
     if (d.k === "pan") { s.auto = false; s.ox = d.ox + x - d.sx; s.oy = d.oy + y - d.sy; schedule(); return; }
     const [cx, cy] = toComp(x, y);
     live((p) => {
-      const l = p.layers.find((q) => q.id === d.id); if (!l) return;
+      const l = p.layers.find((q) => q.id === (d.k === "ik" ? d.ids[0] : d.id)); if (!l) return;
       if (d.k === "move") {
         const [dx, dy] = apply(d.inv, cx - d.p0[0], cy - d.p0[1]);
         writeProp(l, "x", round2(d.x0 + dx)); writeProp(l, "y", round2(d.y0 + dy));
@@ -182,6 +220,14 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
         let r = d.r0 + (d.sign * d.acc * 180) / Math.PI;
         if (e.shiftKey) r = Math.round(r / 15) * 15;
         writeProp(l, "rot", round2(r));
+      } else if (d.k === "ik") {
+        const { d1, d2 } = pull(d.j1, d.j2, d.e0, [cx, cy]), deg = 180 / Math.PI;
+        if (d.ids.length === 1) writeProp(l, "rot", round2(d.r0[0] + d.sign[0] * d1 * deg));
+        else {
+          const up = p.layers.find((q) => q.id === d.ids[1]);
+          if (up) writeProp(up, "rot", round2(d.r0[1] + d.sign[1] * d1 * deg));
+          writeProp(l, "rot", round2(d.r0[0] + d.sign[0] * (d2 - d1) * deg));
+        }
       } else if (d.k === "scale") {
         const k = Math.hypot(cx - d.ref[0], cy - d.ref[1]) / d.d0;
         writeProp(l, "sx", round3(d.sx0 * k)); writeProp(l, "sy", round3(d.sy0 * k));
@@ -261,7 +307,7 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
   rev.value;
   const empty = !!p && p.layers.length === 0;
   const setBg = (bg: Background) => { if (p && p.bg !== bg) { begin(); live((pp) => (pp.bg = bg)); finish(); } };
-  const tools: Array<[Tool, string, string]> = [["move", "move", t("t_move")], ["rotate", "rotate", t("t_rotate")], ["pivot", "pivot", t("t_pivot")], ["hand", "hand", t("t_hand")]];
+  const tools: Array<[Tool, string, string]> = [["move", "move", t("t_move")], ["rotate", "rotate", t("t_rotate")], ["pose", "figure", t("t_pose")], ["pivot", "pivot", t("t_pivot")], ["hand", "hand", t("t_hand")]];
   const cursor = tool.value === "hand" ? "grab" : tool.value === "pivot" ? "crosshair" : "default";
 
   return (

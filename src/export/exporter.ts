@@ -167,8 +167,8 @@ export async function runExport(project: Project, dir: FileSystemDirectoryHandle
     for (let f = 0; f < total; f++) {
       if (signal.aborted) throw new DOMException("cancelled", "AbortError");
       const S = solve(p, f);
-      rSee?.draw({ project: p, world: S.world, alpha: S.alpha, bg: "none" }, view, W, H);
-      rSolid?.draw({ project: p, world: S.world, alpha: S.alpha, bg: o.mp4Bg }, view, W, H);
+      rSee?.draw({ project: p, world: S.world, alpha: S.alpha, follow: S.follow, bg: "none" }, view, W, H);
+      rSolid?.draw({ project: p, world: S.world, alpha: S.alpha, follow: S.follow, bg: o.mp4Bg }, view, W, H);
       for (const j of jobs) await j.frame(f, see, solid);
       onProgress({ frame: f + 1, total });
     }

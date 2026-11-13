@@ -138,6 +138,15 @@ export function PropsPanel() {
           <NumField label={t("p_px")} value={l.px} step={1} digits={1} onLive={(x) => movePivotLive(l.id, x, l.py)} onCommit={(x) => { begin(); movePivotLive(l.id, x, l.py); finish(); }} />
           <NumField label={t("p_py")} value={l.py} step={1} digits={1} onLive={(y) => movePivotLive(l.id, l.px, y)} onCommit={(y) => { begin(); movePivotLive(l.id, l.px, y); finish(); }} />
         </div>
+        {l.parent && (
+          <div class="grp">
+            <h3>{t("g_bend")}</h3>
+            <NumField label={t("p_bend")} value={l.bend ?? 0} step={1} digits={0} suffix=" px"
+              onLive={(x) => live((pp) => { const q = pp.layers.find((z) => z.id === l.id); if (q) q.bend = Math.max(0, Math.min(2000, Math.round(x))); })}
+              onCommit={(x) => edit((pp) => { const q = pp.layers.find((z) => z.id === l.id); if (q) q.bend = Math.max(0, Math.min(2000, Math.round(x))); })} />
+            <p class="hint-s">{t("bend_hint")}</p>
+          </div>
+        )}
         <p class="hint-s">{mode.value === "setup" ? t("mode_setup_hint") : t("mode_animate_hint")}</p>
       </div></div>
     </aside>

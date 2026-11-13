@@ -111,6 +111,7 @@ export function Editor() {
       else if (key === "k" && selected.value) { mode.value = "animate"; toggleKeys(selected.value); }
       else if (key === "v") tool.value = "move";
       else if (key === "r") tool.value = "rotate";
+      else if (key === "i") tool.value = "pose";
       else if (key === "p") tool.value = "pivot";
       else if (key === "h") tool.value = "hand";
       else if (key === "c") openCut();

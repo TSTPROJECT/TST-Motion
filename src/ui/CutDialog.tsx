@@ -646,7 +646,7 @@ export function CutDialog() {
     };
     const plan = used.map(({ q, k }) => {
       const [, , , , sx, sy, c] = bx[k];
-      return { q, k, pivot: q.pivot ?? ([sx / c, sy / c] as [number, number]), parent: parentOf(q.parent) };
+      return { q, k, pivot: q.pivot ?? ([sx / c, sy / c] as [number, number]), parent: parentOf(q.parent), bend: 0 };
     });
     plan.forEach((pc, i) => { if (pc.parent === i) pc.parent = undefined; });
     // overlap at each joint, so turning a part never opens a gap
@@ -656,6 +656,7 @@ export function CutDialog() {
       const pa = plan[pc.parent], back = pc.q.z <= pa.q.z ? pc.k : pa.k, front = back === pc.k ? pa.k : pc.k;
       const m = meeting(lab, iw, ih, back, front, pc.k, pc.pivot);
       pc.pivot = snapPivot(m, pc.pivot); // turn where the two parts really meet
+      if (m) pc.bend = m.wide * 0.75; // a soft joint about as big as the limb is wide
       const add = jointOverlap(lab, iw, ih, { back, front, child: pc.k, pivot: pc.pivot }, m);
       if (add.length) extra.set(back, (extra.get(back) ?? []).concat(add));
     }
@@ -671,7 +672,7 @@ export function CutDialog() {
       }
       const box = { x: b[0], y: b[1], w: b[2] - b[0] + 1, h: b[3] - b[1] + 1 };
       const a = await addAsset(pid, pc.q.name, await png(M.extract(w.img, box, (i) => (lab[i] === k || mine?.[i] ? 255 : 0)), box.w, box.h), box.w, box.h);
-      pieces.push({ asset: a, x: box.x, y: box.y, name: pc.q.name, pivot: pc.pivot, parent: pc.parent });
+      pieces.push({ asset: a, x: box.x, y: box.y, name: pc.q.name, pivot: pc.pivot, parent: pc.parent, bend: pc.bend });
     }
     splitLayer(l.id, pieces);
     toast(t("auto_done", { n: pieces.length }));

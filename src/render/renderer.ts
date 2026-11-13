@@ -5,7 +5,11 @@ import type { Background, Project } from "../model/types";
 import { getLoaded } from "../io/assets";
 
 /** bg: override the project background. "none" = fully transparent (export), "#rrggbb" = any colour. */
-export interface Frame { project: Project; world: Map<string, Mat>; alpha: Map<string, number>; bg?: Background | "none" | string }
+export interface Frame {
+  project: Project; world: Map<string, Mat>; alpha: Map<string, number>; bg?: Background | "none" | string;
+  /** soft joints (see Layer.bend): where each such picture would be without its own turn. The 2D fallback draws them stiff. */
+  follow?: Map<string, Mat>;
+}
 export interface RendererOptions {
   /** keep the picture after drawing (needed when reading it back later, e.g. export) */
   preserve?: boolean;
@@ -16,9 +20,16 @@ type Canvas = HTMLCanvasElement | OffscreenCanvas;
 /** view: composition pixels -> canvas pixels */
 export interface Renderer { draw(f: Frame, view: Mat, w: number, h: number): void; forget(assetId: string): void; kind: "webgl" | "2d" }
 
+// Each picture is a fine grid, so a soft joint can bend it: points near the pivot go where the part it
+// follows would put them (mf), points further than "rad" go with the part itself (m), and in between blend.
 const VS = `#version 300 es
-in vec2 a; uniform mat3 m; uniform vec2 size; uniform vec2 res; out vec2 uv;
-void main(){ uv = a; vec3 p = m * vec3(a * size, 1.0); gl_Position = vec4(p.x / res.x * 2.0 - 1.0, 1.0 - p.y / res.y * 2.0, 0.0, 1.0); }`;
+in vec2 a; uniform mat3 m; uniform mat3 mf; uniform vec2 piv; uniform float rad; uniform vec2 size; uniform vec2 res; out vec2 uv;
+void main(){
+  uv = a; vec2 q = a * size; vec3 p = m * vec3(q, 1.0);
+  if (rad > 0.0) { float w = 1.0 - smoothstep(0.0, rad, distance(q, piv)); p = mix(p, mf * vec3(q, 1.0), w); }
+  gl_Position = vec4(p.x / res.x * 2.0 - 1.0, 1.0 - p.y / res.y * 2.0, 0.0, 1.0);
+}`;
+const GRID = 32;
 const FS = `#version 300 es
 precision highp float; in vec2 uv; uniform sampler2D tex; uniform int mode; uniform vec4 color; uniform float alpha; uniform vec2 size; out vec4 o;
 void main(){
@@ -65,11 +76,19 @@ export function createRenderer(canvas: Canvas, opts: RendererOptions = {}): Rend
   const prog = gl && program(gl);
   if (!gl || !prog) return create2d(canvas, opts);
   gl.useProgram(prog);
+  const verts = new Float32Array((GRID + 1) * (GRID + 1) * 2), idx = new Uint16Array(GRID * GRID * 6);
+  for (let y = 0, k = 0; y <= GRID; y++) for (let x = 0; x <= GRID; x++) { verts[k++] = x / GRID; verts[k++] = y / GRID; }
+  for (let y = 0, k = 0; y < GRID; y++) for (let x = 0; x < GRID; x++) {
+    const i = y * (GRID + 1) + x; idx.set([i, i + 1, i + GRID + 1, i + 1, i + GRID + 2, i + GRID + 1], k); k += 6;
+  }
   const buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1]), gl.STATIC_DRAW);
+  gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+  const ibuf = gl.createBuffer(); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibuf); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+  const mesh = () => gl.drawElements(gl.TRIANGLES, idx.length, gl.UNSIGNED_SHORT, 0);
   const loc = gl.getAttribLocation(prog, "a"); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
   const U = (n: string) => gl.getUniformLocation(prog, n);
   const uM = U("m"), uSize = U("size"), uRes = U("res"), uMode = U("mode"), uColor = U("color"), uAlpha = U("alpha");
+  const uMf = U("mf"), uPiv = U("piv"), uRad = U("rad");
   gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   const textures = new Map<string, { tex: WebGLTexture; bmp: ImageBitmap }>();
 
@@ -95,8 +114,8 @@ export function createRenderer(canvas: Canvas, opts: RendererOptions = {}): Rend
   return {
     kind: "webgl",
     forget(id) { const t = textures.get(id); if (t) { gl.deleteTexture(t.tex); textures.delete(id); } },
-    draw({ project: p, world, alpha, bg }, view, w, h) {
-      gl.viewport(0, 0, w, h);
+    draw({ project: p, world, alpha, bg, follow }, view, w, h) {
+      gl.viewport(0, 0, w, h); gl.uniform1f(uRad, 0);
       gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
       gl.uniform2f(uRes, w, h);
       // composition background
@@ -105,7 +124,7 @@ export function createRenderer(canvas: Canvas, opts: RendererOptions = {}): Rend
         gl.uniformMatrix3fv(uM, false, m3(view)); gl.uniform2f(uSize, p.w, p.h);
         if (back === "checker") gl.uniform1i(uMode, 2);
         else { gl.uniform1i(uMode, 1); gl.uniform4f(uColor, back[0], back[1], back[2], 1); }
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        mesh();
       }
       gl.uniform1i(uMode, 0);
       for (const l of p.layers) {
@@ -116,7 +135,10 @@ export function createRenderer(canvas: Canvas, opts: RendererOptions = {}): Rend
         gl.bindTexture(gl.TEXTURE_2D, tex);
         gl.uniformMatrix3fv(uM, false, m3(mulView(view, m)));
         gl.uniform2f(uSize, a.w, a.h); gl.uniform1f(uAlpha, op);
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        const f = l.bend && l.bend > 0 ? follow?.get(l.id) : undefined;
+        if (f) { gl.uniformMatrix3fv(uMf, false, m3(mulView(view, f))); gl.uniform2f(uPiv, l.px, l.py); gl.uniform1f(uRad, l.bend!); }
+        else gl.uniform1f(uRad, 0);
+        mesh();
       }
     },
   };
