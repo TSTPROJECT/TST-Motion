@@ -1,7 +1,7 @@
 // Time ruler, one row per part with its keyframes, play controls.
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
-import { project, rev, frame, playing, loop, selected, mode, edit, moveKeys } from "../model/store";
+import { project, rev, frame, playing, loop, selected, mode, edit, moveKeys, onion, advanced } from "../model/store";
 import { keyFrames } from "../model/anim";
 import { t } from "../i18n";
 import { Icon } from "./icons";
@@ -81,6 +81,14 @@ export function Timeline() {
         </button>
         <button class="ibtn ghost" title={t("next_frame")} aria-label={t("next_frame")} onClick={() => { playing.value = false; frame.value = Math.min(total - 1, f + 1); }}><Icon n="next" /></button>
         <button class={"ibtn ghost" + (loop.value ? " on" : "")} title={t("loop")} aria-label={t("loop")} aria-pressed={loop.value} onClick={() => (loop.value = !loop.value)}><Icon n="loop" /></button>
+        <button class={"ibtn ghost" + (onion.value.on ? " on" : "")} title={t("onion_tip")} aria-label={t("onion")} aria-pressed={onion.value.on} onClick={() => (onion.value = { ...onion.value, on: !onion.value.on })}><Icon n="onion" /></button>
+        {onion.value.on && advanced.value && (
+          <span class="onionset" title={t("onion_set_tip")}>
+            <label>{t("onion_before")}<input class="field num" type="number" min={0} max={5} value={onion.value.before} onChange={(e) => (onion.value = { ...onion.value, before: Math.max(0, Math.min(5, +(e.target as HTMLInputElement).value || 0)) })} /></label>
+            <label>{t("onion_after")}<input class="field num" type="number" min={0} max={5} value={onion.value.after} onChange={(e) => (onion.value = { ...onion.value, after: Math.max(0, Math.min(5, +(e.target as HTMLInputElement).value || 0)) })} /></label>
+            <label>{t("onion_step")}<input class="field num" type="number" min={1} max={30} value={onion.value.step} onChange={(e) => (onion.value = { ...onion.value, step: Math.max(1, Math.min(30, +(e.target as HTMLInputElement).value || 1)) })} /></label>
+          </span>
+        )}
         <span class="tc num">{fmt(f, p.fps)} <span>/ {fmt(total, p.fps)}</span></span>
         <div class="tl-right">
           <span class="lbl num">{t("frame_n", { n: f })} · {p.fps} fps</span>

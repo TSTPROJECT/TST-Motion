@@ -158,6 +158,15 @@ const th = {
   depth_out: "ยื่นออกมา",
   p_depth: "ความลึก",
   depth_hint: "ชิ้นที่ยื่นออกมา (จมูก ผมหน้า) เลื่อนมากเวลาหัน ชิ้นที่อยู่หลังหัว (ผมหลัง หู) เลื่อนสวนทาง",
+  e_curve: "กำหนดเอง",
+  curve_hint: "ลากจุดกลมสองจุดเพื่อปรับความเร็ว เส้นชันตรงไหน = ตรงนั้นเร็ว เส้นราบ = ช้า เงาด้านล่างคือกราฟความเร็ว ลากจุดเกินกรอบบน = เด้งเลยแล้วกลับ",
+  curve_need_next: "ต้องมีคีย์ถัดไปก่อน กราฟความเร็วคือการเคลื่อนจากคีย์นี้ไปคีย์ถัดไป",
+  onion: "เห็นเฟรมข้างเคียง",
+  onion_tip: "เห็นเฟรมข้างเคียงจางๆ (แดง = ก่อนหน้า, เขียว = ถัดไป) ช่วยดูระยะและจังหวะการเคลื่อนไหว",
+  onion_set_tip: "จำนวนเฟรมก่อน/หลังที่แสดง และระยะห่างกี่เฟรม",
+  onion_before: "ก่อน",
+  onion_after: "หลัง",
+  onion_step: "ห่าง",
 };
 export type Key = keyof typeof th;
 const en: Record<Key, string> = {
@@ -308,6 +317,15 @@ const en: Record<Key, string> = {
   depth_out: "Sticks out",
   p_depth: "Depth",
   depth_hint: "Parts that stick out (nose, fringe) slide more when the head turns; parts behind (back hair, ears) slide the other way",
+  e_curve: "Custom",
+  curve_hint: "Drag the two round handles to shape the speed: steep line = fast, flat = slow. The shading below is the speed. Pull a handle above the box to overshoot and come back",
+  curve_need_next: "Add a later key first: the speed graph is the move from this key to the next",
+  onion: "Onion skin",
+  onion_tip: "See nearby frames faintly (red = before, green = after) to judge spacing and timing",
+  onion_set_tip: "How many frames before/after to show, and how many frames apart",
+  onion_before: "Before",
+  onion_after: "After",
+  onion_step: "Every",
 };
 const dict = { th, en };
 export function t(k: Key, vars?: Record<string, string | number>) {

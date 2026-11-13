@@ -79,3 +79,12 @@ test("a soft joint knows where the part would be without its own turn", () => {
   assert.ok(Math.abs(Math.atan2(w[1], w[0]) * 180 / Math.PI - 75) < 1e-9);
   assert.equal(S.follow.has("a"), false);
 });
+
+test("speed curve: a custom curve key eases between keys", async () => {
+  const { bezier, sampleKeys } = await import("../src/model/anim.ts");
+  assert.ok(Math.abs(bezier([0, 0, 1, 1], 0.3) - 0.3) < 1e-6);
+  assert.ok(bezier([0.9, 0, 1, 0.1], 0.5) < 0.2, "slow start");
+  const keys = [{ f: 0, v: 0, e: "curve" as const, c: [0, 0.9, 0.1, 1] as [number, number, number, number] }, { f: 10, v: 100, e: "linear" as const }];
+  assert.ok(sampleKeys(keys, 3, 0) > 70, "fast start");
+  assert.equal(sampleKeys(keys, 10, 0), 100);
+});

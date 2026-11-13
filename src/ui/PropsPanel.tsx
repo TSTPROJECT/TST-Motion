@@ -1,8 +1,8 @@
 // Numbers for the selected part: position, rotation, size, opacity, pivot, parent, easing.
 import { useRef, useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
-import { project, rev, frame, selected, mode, tool, advanced, edit, begin, live, finish, writeProp, toggleKeys, toggleKeyProp, hasKeyAt, keyIndex, setEaseAt, easeAt, setParent, movePivotLive, renameLayer } from "../model/store";
-import { valueAt, keyFrames, depthOf } from "../model/anim";
+import { project, rev, frame, selected, mode, tool, advanced, edit, begin, live, finish, writeProp, toggleKeys, toggleKeyProp, hasKeyAt, keyIndex, setEaseAt, easeAt, keyAt, setCurveLive, setParent, movePivotLive, renameLayer } from "../model/store";
+import { valueAt, keyFrames, depthOf, bezier } from "../model/anim";
 import { TURN_MAX, NOD_MAX } from "../model/warp";
 import { pinChan, type Chan, type Ease, type Layer, type Prop } from "../model/types";
 import { t, type Key as TKey } from "../i18n";
@@ -52,7 +52,12 @@ function NumField({ label, value, step, digits, onLive, onCommit, suffix, keyDot
 const EASE_LIST: Array<[Ease, string]> = [
   ["smooth", "M3 18C16 18 18 3 31 3"], ["linear", "M3 18 31 3"], ["out", "M3 18C8 5 16 3 31 3"],
   ["in", "M3 18C18 18 26 15 31 3"], ["back", "M3 18C12 18 13 -1 22 1.5 27 3 28 4 31 4"], ["hold", "M3 18H24V3H31"],
+  ["curve", "M3 18C6 3 20 22 31 3"],
 ];
+/** Curves the presets stand for, so the graph can start from the one in use. */
+const AS_CURVE: Partial<Record<Ease, [number, number, number, number]>> = {
+  smooth: [0.45, 0, 0.55, 1], linear: [0, 0, 1, 1], in: [0.55, 0, 1, 0.45], out: [0, 0.55, 0.45, 1], back: [0.34, 1.56, 0.64, 1],
+};
 
 export function PropsPanel() {
   rev.value;
@@ -132,15 +137,20 @@ export function PropsPanel() {
         {mode.value === "animate" && (
           <div class="grp">
             <h3>{t("g_motion")}</h3>
-            {ease === null ? <p class="hint-s">{t("ease_need_key")}</p> : (
+            {ease === null ? <p class="hint-s">{t("ease_need_key")}</p> : <>
               <div class="eases">
                 {EASE_LIST.map(([e, d]) => (
-                  <button class="ease" aria-pressed={ease === e} onClick={() => setEaseAt(l.id, f, e)}>
+                  <button class="ease" aria-pressed={ease === e} onClick={() => setEaseAt(l.id, f, e, e === "curve" ? keyAt(l, f)?.c ?? AS_CURVE[ease] : undefined)}>
                     <svg viewBox="0 0 34 21"><path d={d} /></svg>{t(("e_" + e) as TKey)}
                   </button>
                 ))}
               </div>
-            )}
+              {(ease === "curve" || (adv && ease !== "hold")) && next !== undefined && (
+                <CurveEditor c={ease === "curve" ? keyAt(l, f)?.c ?? [0.42, 0, 0.58, 1] : AS_CURVE[ease] ?? [0.42, 0, 0.58, 1]}
+                  onLive={(c) => setCurveLive(l.id, f, c)} />
+              )}
+              {(ease === "curve" || adv) && next === undefined && <p class="hint-s">{t("curve_need_next")}</p>}
+            </>}
           </div>
         )}
 
@@ -295,6 +305,50 @@ function TurnPad({ turn, nod, onLive }: { turn: number; nod: number; onLive: (tu
       <i class="cross" />
       <b style={{ left: `${(turn + 1) * 50}%`, top: `${(nod + 1) * 50}%` }} />
       <span class="num">{Math.round(turn * TURN_MAX)}° · {Math.round(nod * NOD_MAX)}°</span>
+    </div>
+  );
+}
+
+/**
+ * Speed graph for the move from this key to the next: the line shows how far along the value is over
+ * the time (bottom-left = this key, top-right = the next one), the shaded hill shows the speed.
+ * Drag the two round handles to shape it, like a CSS / After Effects ease.
+ */
+function CurveEditor({ c, onLive }: { c: [number, number, number, number]; onLive: (c: [number, number, number, number]) => void }) {
+  const svg = useRef<SVGSVGElement>(null), held = useRef<0 | 1 | 2>(0);
+  const W = 232, H = 150, P = 16, Y0 = -0.3, Y1 = 1.3;
+  const X = (u: number) => P + u * (W - 2 * P), Y = (v: number) => H - P - ((v - Y0) / (Y1 - Y0)) * (H - 2 * P);
+  const pts: string[] = [], sp: number[] = [];
+  for (let i = 0; i <= 48; i++) { const u = i / 48; pts.push(`${X(u).toFixed(1)},${Y(bezier(c, u)).toFixed(1)}`); }
+  for (let i = 0; i < 48; i++) sp.push(Math.abs(bezier(c, (i + 1) / 48) - bezier(c, i / 48)) * 48);
+  const top = Math.max(1.5, ...sp);
+  const speed = `M${X(0)},${H - P} ` + sp.map((v, i) => `L${X((i + 0.5) / 48).toFixed(1)},${(H - P - (v / top) * (H - 2 * P) * 0.6).toFixed(1)}`).join(" ") + ` L${X(1)},${H - P}Z`;
+  const drag = (e: PointerEvent) => {
+    if (!held.current) return;
+    const r = svg.current!.getBoundingClientRect();
+    const u = Math.max(0, Math.min(1, ((e.clientX - r.left) * (W / r.width) - P) / (W - 2 * P)));
+    const v = Math.max(Y0, Math.min(Y1, Y0 + ((H - P - (e.clientY - r.top) * (H / r.height)) / (H - 2 * P)) * (Y1 - Y0)));
+    const n: [number, number, number, number] = [...c];
+    if (held.current === 1) { n[0] = +u.toFixed(3); n[1] = +v.toFixed(3); } else { n[2] = +u.toFixed(3); n[3] = +v.toFixed(3); }
+    onLive(n);
+  };
+  const handle = (k: 1 | 2) => {
+    const hx = X(c[k === 1 ? 0 : 2]), hy = Y(c[k === 1 ? 1 : 3]), ax = k === 1 ? X(0) : X(1), ay = k === 1 ? Y(0) : Y(1);
+    return <>
+      <line x1={ax} y1={ay} x2={hx} y2={hy} class="cv-arm" />
+      <circle cx={hx} cy={hy} r={7} class="cv-h" onPointerDown={(e) => { (e.target as Element).setPointerCapture(e.pointerId); held.current = k; begin(); }} />
+    </>;
+  };
+  return (
+    <div class="curve">
+      <svg ref={svg} viewBox={`0 0 ${W} ${H}`} onPointerMove={(e) => drag(e as unknown as PointerEvent)}
+        onPointerUp={() => { if (held.current) { held.current = 0; finish(); } }} onPointerCancel={() => { if (held.current) { held.current = 0; finish(); } }}>
+        <rect x={X(0)} y={Y(1)} width={X(1) - X(0)} height={Y(0) - Y(1)} class="cv-box" />
+        <path d={speed} class="cv-speed" />
+        <polyline points={pts.join(" ")} class="cv-line" />
+        {handle(1)}{handle(2)}
+      </svg>
+      <p class="hint-s">{t("curve_hint")}</p>
     </div>
   );
 }
