@@ -44,14 +44,36 @@ export function sampleKeys(keys: Key[] | undefined, frame: number, fallback: num
 }
 
 /** Value when nothing was set: sizes and opacity start at 1, everything else at 0. */
-export const chanDefault = (ch: Chan) => (ch === "sx" || ch === "sy" || ch === "o" ? 1 : 0);
+export const chanDefault = (ch: Chan) => (ch === "sx" || ch === "sy" || ch === "o" || ch === "type" ? 1 : 0);
 export function valueAt(layer: Layer, ch: Chan, frame: number): number {
   return sampleKeys(layer.tracks[ch], frame, layer.base[ch] ?? chanDefault(ch));
 }
+/** Letters (grapheme clusters, so Thai vowels and tone marks stay with their consonant) of a text. */
+const seg = typeof Intl !== "undefined" && "Segmenter" in Intl ? new Intl.Segmenter("th", { granularity: "grapheme" }) : null;
+const counts = new Map<string, number>();
+export function letters(s: string): string[] {
+  return seg ? [...seg.segment(s)].map((x) => x.segment) : [...s];
+}
+export function letterCount(s: string): number {
+  let n = counts.get(s);
+  if (n === undefined) { n = letters(s).filter((c) => c !== "\n" && c !== "\r\n").length; if (counts.size > 500) counts.clear(); counts.set(s, n); }
+  return n;
+}
+/** Picture id for a text showing only its first n letters: "<asset>#<n>" (drawn on demand, see render/text.ts). */
+export const partId = (asset: string, n: number) => `${asset}#${n}`;
+export const baseId = (id: string) => { const i = id.indexOf("#"); return i < 0 ? id : id.slice(0, i); };
+
 /** Which picture a part shows at a frame: its own, one of its swaps, or none (null). */
 export function pictureAt(layer: Layer, frame: number): string | null {
   const k = Math.round(valueAt(layer, "swap", frame));
   if (k < 0) return null;
+  if (layer.text && layer.asset && k === 0) {
+    const typed = valueAt(layer, "type", frame);
+    if (typed < 0.9999) {
+      const n = Math.max(0, Math.floor(typed * letterCount(layer.text.s) + 1e-6));
+      return n <= 0 ? null : partId(layer.asset, n);
+    }
+  }
   return k === 0 ? layer.asset : layer.swaps?.[k - 1] ?? layer.asset;
 }
 

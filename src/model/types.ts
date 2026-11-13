@@ -5,7 +5,8 @@ export type Prop = "x" | "y" | "rot" | "sx" | "sy" | "o";
 export const PROPS: Prop[] = ["x", "y", "rot", "sx", "sy", "o"];
 /**
  * Any value that can have keyframes: a Prop, or "turn" / "nod" (3D head turn, -1..1),
- * "swap" (which picture is shown), or "pin:<id>:x" / "pin:<id>:y" (how far a pin was dragged).
+ * "swap" (which picture is shown), "type" (share of a text's letters shown, 0..1),
+ * or "pin:<id>:x" / "pin:<id>:y" (how far a pin was dragged).
  */
 export type Chan = string;
 export const pinChan = (id: string, axis: "x" | "y") => `pin:${id}:${axis}`;
@@ -36,6 +37,32 @@ export interface Sway {
 }
 /** 3D head turn: the picture is treated as a ball (centre cx,cy, radii rx,ry in its own pixels). */
 export interface Face { cx: number; cy: number; rx: number; ry: number }
+/** A text part: its picture is drawn from this (see render/text.ts) and saved like any other picture. */
+export interface TextStyle {
+  s: string;
+  /** font family name (bundled, installed on the computer, or added to the project) */
+  font: string;
+  /** letter height in composition pixels */
+  size: number;
+  bold: boolean;
+  italic: boolean;
+  color: string;
+  align: "left" | "center" | "right";
+  /** line height, times the size */
+  line: number;
+  /** extra space between letters, times the size */
+  spacing: number;
+  /** outline width in pixels (0 = none) */
+  stroke: number;
+  strokeColor: string;
+  /** box behind the text: padding in pixels (0 = no box) */
+  box: number;
+  boxColor: string;
+  /** box corner roundness 0..1 */
+  boxRound: number;
+}
+/** A font file added to a project, so the project looks the same on any computer. */
+export interface FontFile { id: string; family: string; name: string; type: string }
 /** A saved pose: every part's values, by layer id. */
 export interface SavedPose { id: string; name: string; values: Record<string, Record<Chan, number>> }
 
@@ -68,6 +95,8 @@ export interface Layer {
   face?: Face;
   /** for a child of a 3D head: how far it sits in front (+) or behind (-) the face surface, in the head's pixels */
   depth?: number;
+  /** text part; the "type" value (0..1) shows that share of the letters (typewriter) */
+  text?: TextStyle;
 }
 
 export interface Asset {
@@ -99,6 +128,8 @@ export interface Project {
   assets: Asset[];
   /** pose library */
   poses?: SavedPose[];
+  /** font files added to this project */
+  fonts?: FontFile[];
   created: number;
   modified: number;
 }

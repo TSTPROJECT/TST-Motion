@@ -17,6 +17,7 @@ import { ExportDialog } from "./ExportDialog";
 import { CutDialog, cutLayer } from "./CutDialog";
 import { TopToggles } from "./Home";
 import { VersionsDialog } from "./Recovery";
+import { addTextLayer } from "./textOps";
 import { toast, installPrompt, installed, install, isIos } from "./shell";
 import { openFile, pickFile } from "./open";
 
@@ -38,6 +39,7 @@ export const pickImages = async () => importNow(await pickFile(ACCEPT, true));
 function openCut() {
   const l = project.value?.layers.find((x) => x.id === selected.value);
   if (!l?.asset) { toast(t("cut_need_image"), true); return; }
+  if (l.text) { toast(t("cut_text"), true); return; }
   playing.value = false; cutLayer.value = l.id;
 }
 
@@ -118,6 +120,7 @@ export function Editor() {
       else if (key === "p") tool.value = "pivot";
       else if (key === "h") tool.value = "hand";
       else if (key === "c") openCut();
+      else if (key === "t") void addTextLayer();
       else if (key === "escape") selected.value = null;
       else if ((key === "delete" || key === "backspace") && selected.value) {
         const l = pp.layers.find((x) => x.id === selected.value);
@@ -162,6 +165,7 @@ export function Editor() {
               <div class="menu" role="menu" onClick={() => setMenu(false)}>
                 <button onClick={pickImages}><Icon n="import" />{t("import")}</button>
                 <button onClick={() => setExportInfo(true)}><Icon n="export" />{t("export")}</button>
+                <button onClick={() => void addTextLayer()}><Icon n="text" />{t("add_text")}</button>
                 <button onClick={openCut}><Icon n="scissors" />{t("cut_open")}</button>
                 <button onClick={redo} disabled={!canRedo.value}><Icon n="redo" />{t("redo")}</button>
                 <hr />

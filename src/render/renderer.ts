@@ -4,6 +4,10 @@ import type { Mat } from "../model/anim";
 import type { Background, Project } from "../model/types";
 import { getLoaded } from "../io/assets";
 import { GRID } from "../model/warp";
+import { baseId } from "../model/anim";
+import { partialText } from "./text";
+
+type Pic = ImageBitmap | OffscreenCanvas;
 
 /** bg: override the project background. "none" = fully transparent (export), "#rrggbb" = any colour. */
 export interface Frame {
@@ -22,7 +26,7 @@ export interface RendererOptions {
   /** keep the picture after drawing (needed when reading it back later, e.g. export) */
   preserve?: boolean;
   /** where to get each part's image; defaults to the preview-sized images */
-  image?: (assetId: string) => ImageBitmap | undefined;
+  image?: (assetId: string) => Pic | undefined;
 }
 type Canvas = HTMLCanvasElement | OffscreenCanvas;
 /** view: composition pixels -> canvas pixels */
@@ -101,13 +105,19 @@ export function createRenderer(canvas: Canvas, opts: RendererOptions = {}): Rend
   const uM = U("m"), uSize = U("size"), uRes = U("res"), uMode = U("mode"), uColor = U("color"), uAlpha = U("alpha");
   const uMf = U("mf"), uPiv = U("piv"), uRad = U("rad"), uBent = U("bent");
   gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-  const textures = new Map<string, { tex: WebGLTexture; bmp: ImageBitmap }>();
+  const textures = new Map<string, { tex: WebGLTexture; bmp: Pic }>();
+  const partIds: string[] = [];
 
-  function texFor(id: string) {
-    const bmp = image(id); if (!bmp) return null;
+  function texFor(p: Project, id: string) {
+    const bmp = id.includes("#") ? partialText(p, id) : image(id); if (!bmp) return null;
     const have = textures.get(id);
     if (have && have.bmp === bmp) return have.tex;
     if (have) gl!.deleteTexture(have.tex);
+    if (id.includes("#") && !have) {
+      // typewriter pictures are many and short-lived: keep only the latest few on the graphics card
+      partIds.push(id);
+      while (partIds.length > 12) { const old = partIds.shift()!; const t = textures.get(old); if (t) { gl!.deleteTexture(t.tex); textures.delete(old); } }
+    }
     const tex = gl!.createTexture()!;
     gl!.bindTexture(gl!.TEXTURE_2D, tex);
     gl!.pixelStorei(gl!.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
@@ -149,11 +159,11 @@ export function createRenderer(canvas: Canvas, opts: RendererOptions = {}): Rend
         for (const l of p.layers) {
           if (!l.visible) continue;
           const id = F.pic?.has(l.id) ? F.pic.get(l.id)! : l.asset; if (!id) continue;
-          const a = p.assets.find((x) => x.id === id); const tex = a && texFor(a.id); const op = (F.alpha.get(l.id) ?? 1) * k;
+          const a = p.assets.find((x) => x.id === baseId(id)); const tex = a && texFor(p, id); const op = (F.alpha.get(l.id) ?? 1) * k;
           if (!a || !tex || op <= 0) continue;
           let m = F.world.get(l.id)!;
           // a swapped picture of another size sits centred where the part's own picture is
-          const own = id !== l.asset ? p.assets.find((x) => x.id === l.asset) : undefined;
+          const own = baseId(id) !== l.asset ? p.assets.find((x) => x.id === l.asset) : undefined;
           if (own && (own.w !== a.w || own.h !== a.h)) m = mulView(m, [1, 0, 0, 1, (own.w - a.w) / 2, (own.h - a.h) / 2]);
           gl!.bindTexture(gl!.TEXTURE_2D, tex);
           gl!.uniformMatrix3fv(uM, false, m3(mulView(view, m)));
@@ -194,9 +204,9 @@ export function create2d(canvas: Canvas, opts: RendererOptions = {}): Renderer {
       for (const l of p.layers) {
         const id = pic?.has(l.id) ? pic.get(l.id)! : l.asset;
         if (!l.visible || !id) continue;
-        const a = p.assets.find((x) => x.id === id); const bmp = a && image(a.id);
+        const a = p.assets.find((x) => x.id === baseId(id)); const bmp = a && (id.includes("#") ? partialText(p, id) : image(a.id));
         if (!a || !bmp) continue;
-        const own = id !== l.asset ? p.assets.find((x) => x.id === l.asset) : undefined;
+        const own = baseId(id) !== l.asset ? p.assets.find((x) => x.id === l.asset) : undefined;
         const m = own && (own.w !== a.w || own.h !== a.h) ? mulView(world.get(l.id)!, [1, 0, 0, 1, (own.w - a.w) / 2, (own.h - a.h) / 2]) : world.get(l.id)!;
         g.setTransform(...mulView(view, m)); g.globalAlpha = alpha.get(l.id) ?? 1;
         g.drawImage(bmp, 0, 0, a.w, a.h);

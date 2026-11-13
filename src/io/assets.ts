@@ -1,5 +1,5 @@
 // Images in memory: decoded bitmaps for drawing, small alpha masks for tapping on parts.
-import type { Asset, Layer, Project } from "../model/types";
+import type { Asset, FontFile, Layer, Project } from "../model/types";
 import { makeLayer, uid } from "../model/store";
 import { getBlob, putBlob } from "./db";
 
@@ -59,6 +59,17 @@ export function hitAsset(id: string, w: number, h: number, x: number, y: number)
   return L.mask[my * L.mw + mx] > 24;
 }
 
+/** Make a font file of a project usable for drawing text. */
+const loadedFonts = new Set<string>();
+export async function registerFont(f: FontFile, blob: Blob) {
+  blobs.set(f.id, blob);
+  if (loadedFonts.has(f.id)) return;
+  const face = new FontFace(f.family, await blob.arrayBuffer());
+  await face.load(); document.fonts.add(face); loadedFonts.add(f.id);
+}
+/** Font files of a project, if any (kept with its images). */
+export const getFontBlob = (id: string) => blobs.get(id);
+
 /** Load every image of a saved project from local storage. */
 export async function loadProjectAssets(p: Project, from?: Map<string, Blob>) {
   for (const old of loaded.values()) URL.revokeObjectURL(old.url);
@@ -69,6 +80,12 @@ export async function loadProjectAssets(p: Project, from?: Map<string, Blob>) {
     if (!b) { missing.push(a.name); return; }
     if (from) await putBlob(p.id, a.id, b);
     try { await register(a, b); } catch { missing.push(a.name); }
+  }));
+  await Promise.all((p.fonts ?? []).map(async (f) => {
+    const b = from?.get(f.id) ?? (await getBlob(p.id, f.id));
+    if (!b) { missing.push(f.name); return; }
+    if (from) await putBlob(p.id, f.id, b);
+    try { await registerFont(f, b); } catch { missing.push(f.name); }
   }));
   bump();
   return missing;

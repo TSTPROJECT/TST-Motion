@@ -6,13 +6,14 @@ import { t } from "../i18n";
 import { Icon } from "./icons";
 import { confirmBox } from "./Dialogs";
 import { cutLayer } from "./CutDialog";
+import { addTextLayer } from "./textOps";
 
 export function LayersPanel() {
   const [editing, setEditing] = useState<string | null>(null);
   rev.value; assetsVersion();
   const p = project.value; if (!p) return null;
   const sel = selected.value, idx = p.layers.findIndex((l) => l.id === sel);
-  const selAsset = !!p.layers[idx]?.asset;
+  const selAsset = !!p.layers[idx]?.asset && !p.layers[idx]?.text;
   const name = (id: string | null) => p.layers.find((l) => l.id === id)?.name ?? "";
   const list = [...p.layers].reverse();
 
@@ -21,6 +22,7 @@ export function LayersPanel() {
       <div class="pane-h">
         <h2>{t("layers")} <span class="muted num" style={{ fontWeight: 400, fontSize: "12px" }}>{p.layers.length}</span></h2>
         <div class="acts">
+          <button class="ibtn ghost" title={`${t("add_text")} (T)`} aria-label={t("add_text")} onClick={() => void addTextLayer()}><Icon n="text" /></button>
           <button class="ibtn ghost" title={t("bring_front")} aria-label={t("bring_front")} disabled={idx < 0 || idx === p.layers.length - 1} onClick={() => sel && moveLayer(sel, 1)}><Icon n="up" /></button>
           <button class="ibtn ghost" title={t("send_back")} aria-label={t("send_back")} disabled={idx <= 0} onClick={() => sel && moveLayer(sel, -1)}><Icon n="down" /></button>
           <button class="ibtn ghost" title={`${t("cut_open")} (C)`} aria-label={t("cut_open")} disabled={!selAsset} onClick={() => sel && (cutLayer.value = sel)}><Icon n="scissors" /></button>

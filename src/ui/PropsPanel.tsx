@@ -11,15 +11,16 @@ import { toast } from "./shell";
 import { getLoaded, importFiles, ACCEPT } from "../io/assets";
 import { pickFile } from "./open";
 import { SWAY_DEFAULT } from "../model/physics";
+import { TextGroup } from "./TextGroup";
 
-function KeyDot({ l, pr }: { l: Layer; pr: Chan }) {
+export function KeyDot({ l, pr }: { l: Layer; pr: Chan }) {
   const keys = l.tracks[pr];
   const state = !keys?.length ? "none" : keyIndex(keys, frame.value) >= 0 ? "on" : "";
   return <button class="kb" title={t("key_prop")} aria-label={t("key_prop")} onClick={() => toggleKeyProp(l.id, pr)}><i class={"dia " + state} /></button>;
 }
 
 /** Number box whose label can be dragged left/right to change the value. */
-function NumField({ label, value, step, digits, onLive, onCommit, suffix, keyDot }: {
+export function NumField({ label, value, step, digits, onLive, onCommit, suffix, keyDot }: {
   label: string; value: number; step: number; digits: number; suffix?: string;
   onLive: (v: number) => void; onCommit: (v: number) => void; keyDot?: ComponentChildren;
 }) {
@@ -120,6 +121,8 @@ export function PropsPanel() {
           </div>
         )}
 
+        {l.text && <TextGroup key={l.id} l={l} />}
+
         <div class="grp">
           <h3>{t("g_transform")}</h3>
           <NumField label={t("p_x")} value={v("x")} step={1} digits={1} keyDot={kd("x")} onLive={(x) => liveSet("x", x)} onCommit={(x) => commit("x", x)} />
@@ -168,7 +171,7 @@ export function PropsPanel() {
             <p class="hint-s">{t("bend_hint")}</p>
           </div>
         )}
-        {asset && (
+        {asset && !l.text && (
           <div class="grp">
             <h3>{t("g_swap")}{mode.value === "animate" && <KeyDot l={l} pr="swap" />}</h3>
             <div class="swaps">
@@ -200,7 +203,7 @@ export function PropsPanel() {
             <p class="hint-s">{t("swap_hint")}</p>
           </div>
         )}
-        {asset && (
+        {asset && !l.text && (
           <div class="grp">
             <h3><span><Icon n="face" size={13} /> {t("g_face")}</span><Toggle on={!!l.face} label={t("g_face")} onChange={(on) => setOn((q) => {
               if (on) { q.face = { cx: asset.w / 2, cy: asset.h / 2, rx: Math.round(asset.w * 0.45), ry: Math.round(asset.h * 0.45) }; return; }

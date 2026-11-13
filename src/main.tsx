@@ -5,6 +5,7 @@ import "@fontsource/anuphan/600.css";
 import "@fontsource/anuphan/700.css";
 import "@fontsource/jetbrains-mono/400.css";
 import "./styles.css";
+import "./fonts.css";
 import "./io/autosave";
 import { App } from "./ui/App";
 import { openStartupFile } from "./ui/open";
