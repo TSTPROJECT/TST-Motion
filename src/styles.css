@@ -389,3 +389,14 @@ button:disabled { cursor: default; opacity: .4; }
 .onionset { display: inline-flex; gap: 6px; align-items: center; font-size: 11.5px; color: var(--muted); }
 .onionset label { display: inline-flex; gap: 4px; align-items: center; }
 .onionset input { width: 44px; height: 26px; padding: 0 4px; }
+
+/* timeline pop-up menus */
+.pop-wrap { position: relative; }
+.btn.sm { height: 30px; padding: 0 10px; font-size: 12.5px; gap: 6px; }
+.menu.pop { top: auto; bottom: 38px; left: 0; right: auto; min-width: 280px; max-height: 70vh; overflow: auto; }
+.menu .row.chk { display: flex; gap: 8px; align-items: center; padding: 6px 10px; font-size: 12.5px; color: var(--muted); }
+.menu .row { display: flex; gap: 6px; align-items: center; padding: 4px 6px; }
+.menu .row .field { flex: 1; min-width: 0; height: 30px; }
+.menu .row.lib .grow { flex: 1; }
+.menu .row.chk { justify-content: flex-start; }
+.menu .row.chk input { margin: 0; }

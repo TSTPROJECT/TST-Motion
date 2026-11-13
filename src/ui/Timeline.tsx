@@ -5,6 +5,7 @@ import { project, rev, frame, playing, loop, selected, mode, edit, moveKeys, oni
 import { keyFrames } from "../model/anim";
 import { t } from "../i18n";
 import { Icon } from "./icons";
+import { PoseMenu, PresetMenu } from "./MotionMenus";
 
 const PAD = 10; // room so a key on frame 0 is not cut off
 const fmt = (f: number, fps: number) => {
@@ -90,6 +91,8 @@ export function Timeline() {
           </span>
         )}
         <span class="tc num">{fmt(f, p.fps)} <span>/ {fmt(total, p.fps)}</span></span>
+        <PoseMenu />
+        <PresetMenu />
         <div class="tl-right">
           <span class="lbl num">{t("frame_n", { n: f })} · {p.fps} fps</span>
           <input type="range" aria-label={t("zoom_tl")} title={t("zoom_tl")} min={0} max={100} value={ppf ? Math.round(Math.log(ppf / fitPpf) / Math.log(40 / fitPpf) * 100) : 0}

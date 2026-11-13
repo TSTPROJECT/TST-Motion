@@ -379,3 +379,24 @@ export function setProjectSettings(s: { name?: string; w?: number; h?: number; f
   });
   const p = project.value!; if (frame.value >= p.frames) frame.value = p.frames - 1;
 }
+
+// ---------- poses ----------
+/** Put a pose (values by layer id) at a frame: setup mode changes the setup pose, animate mode adds keys. */
+export function applyPose(v: Record<string, Record<Chan, number>>, f = frame.value) {
+  edit((p) => {
+    for (const l of p.layers) {
+      const vals = v[l.id]; if (!vals) continue;
+      for (const [ch, x] of Object.entries(vals)) {
+        if (mode.value === "setup") { l.base[ch] = x; continue; }
+        if (Math.abs(valueAt(l, ch, f) - x) > 1e-4 || l.tracks[ch]?.length) writeKey(l, ch, x, f);
+      }
+    }
+  });
+}
+/** Make the last frame match the first, so the clip loops without a jump. */
+export function makeLoop() {
+  edit((p) => {
+    const last = p.frames - 1;
+    for (const l of p.layers) for (const ch of chans(l)) writeKey(l, ch, valueAt(l, ch, 0), last);
+  });
+}
