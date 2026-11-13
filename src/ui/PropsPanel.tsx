@@ -2,7 +2,8 @@
 import { useRef, useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
 import { project, rev, frame, selected, mode, tool, advanced, edit, begin, live, finish, writeProp, toggleKeys, toggleKeyProp, hasKeyAt, keyIndex, setEaseAt, easeAt, setParent, movePivotLive, renameLayer } from "../model/store";
-import { valueAt, keyFrames } from "../model/anim";
+import { valueAt, keyFrames, depthOf } from "../model/anim";
+import { TURN_MAX, NOD_MAX } from "../model/warp";
 import { pinChan, type Chan, type Ease, type Layer, type Prop } from "../model/types";
 import { t, type Key as TKey } from "../i18n";
 import { Icon } from "./icons";
@@ -81,6 +82,7 @@ export function PropsPanel() {
   const asset = p.assets.find((a) => a.id === l.asset);
   const kd = (pr: Chan) => (mode.value === "animate" ? <KeyDot l={l} pr={pr} /> : undefined);
   const adv = advanced.value;
+  const head = l.parent ? p.layers.find((x) => x.id === l.parent) ?? null : null;
   const setOn = (fn: (x: Layer) => void, now = false) => (now ? edit : live)((pp) => { const x = pp.layers.find((q) => q.id === l.id); if (x) fn(x); });
   const chField = (label: string, ch: Chan, step: number, digits: number, suffix?: string) => (
     <NumField label={label} value={valueAt(l, ch, f)} step={step} digits={digits} suffix={suffix} keyDot={kd(ch)}
@@ -188,6 +190,41 @@ export function PropsPanel() {
             <p class="hint-s">{t("swap_hint")}</p>
           </div>
         )}
+        {asset && (
+          <div class="grp">
+            <h3><span><Icon n="face" size={13} /> {t("g_face")}</span><Toggle on={!!l.face} label={t("g_face")} onChange={(on) => setOn((q) => {
+              if (on) { q.face = { cx: asset.w / 2, cy: asset.h / 2, rx: Math.round(asset.w * 0.45), ry: Math.round(asset.h * 0.45) }; return; }
+              delete q.face; for (const ch of ["turn", "nod"]) { delete q.tracks[ch]; delete q.base[ch]; }
+            }, true)} /></h3>
+            {l.face ? <>
+              <TurnPad turn={valueAt(l, "turn", f)} nod={valueAt(l, "nod", f)}
+                onLive={(a, b) => setOn((q) => { writeProp(q, "turn", a); writeProp(q, "nod", b); })} />
+              {mode.value === "animate" && <div class="nf-row"><KeyDot l={l} pr="turn" /><span class="hint-s">{t("face_turn")}</span><KeyDot l={l} pr="nod" /><span class="hint-s">{t("face_nod")}</span></div>}
+              {adv && <>
+                {chField(t("face_turn"), "turn", 0.01, 2)}
+                {chField(t("face_nod"), "nod", 0.01, 2)}
+                <NumField label={t("face_rx")} value={l.face.rx} step={1} digits={0} suffix=" px" onLive={(x) => setOn((q) => { if (q.face) q.face.rx = Math.max(4, x); })} onCommit={(x) => setOn((q) => { if (q.face) q.face.rx = Math.max(4, x); }, true)} />
+                <NumField label={t("face_ry")} value={l.face.ry} step={1} digits={0} suffix=" px" onLive={(x) => setOn((q) => { if (q.face) q.face.ry = Math.max(4, x); })} onCommit={(x) => setOn((q) => { if (q.face) q.face.ry = Math.max(4, x); }, true)} />
+                <NumField label={t("face_cx")} value={l.face.cx} step={1} digits={0} onLive={(x) => setOn((q) => { if (q.face) q.face.cx = x; })} onCommit={(x) => setOn((q) => { if (q.face) q.face.cx = x; }, true)} />
+                <NumField label={t("face_cy")} value={l.face.cy} step={1} digits={0} onLive={(x) => setOn((q) => { if (q.face) q.face.cy = x; })} onCommit={(x) => setOn((q) => { if (q.face) q.face.cy = x; }, true)} />
+              </>}
+              <p class="hint-s">{t("face_hint")}</p>
+            </> : <p class="hint-s">{t("face_off")}</p>}
+          </div>
+        )}
+        {head?.face && (
+          <div class="grp">
+            <h3>{t("g_depth")}</h3>
+            <div class="seg depthseg">
+              {([["depth_back", -0.18], ["depth_on", 0.18], ["depth_out", 0.45]] as Array<[TKey, number]>).map(([k, v]) => {
+                const d = depthOf(p, l, head), want = v * head.face!.rx;
+                return <button aria-pressed={Math.abs(d - want) < 0.5} onClick={() => setOn((q) => (q.depth = Math.round(want)), true)}>{t(k)}</button>;
+              })}
+            </div>
+            {adv && <NumField label={t("p_depth")} value={depthOf(p, l, head)} step={1} digits={0} suffix=" px" onLive={(x) => setOn((q) => (q.depth = Math.round(x)))} onCommit={(x) => setOn((q) => (q.depth = Math.round(x)), true)} />}
+            <p class="hint-s">{t("depth_hint")}</p>
+          </div>
+        )}
         <div class="grp">
           <h3><span><Icon n="wind" size={13} /> {t("g_sway")}</span><Toggle on={!!l.sway} label={t("g_sway")} onChange={(on) => setOn((q) => {
             if (!on) { delete q.sway; return; }
@@ -239,5 +276,25 @@ export function Range({ label, value, min, max, onLive, onCommit }: { label: str
         onChange={(e) => { if (started.current) { started.current = false; onLive(+(e.target as HTMLInputElement).value); finish(); } else onCommit(+(e.target as HTMLInputElement).value); }} />
       <span class="num">{Math.round(value * 100)}%</span>
     </label>
+  );
+}
+
+/** Drag the dot to turn a 3D head: left/right turns, up/down nods. Double-click looks straight ahead. */
+function TurnPad({ turn, nod, onLive }: { turn: number; nod: number; onLive: (turn: number, nod: number) => void }) {
+  const box = useRef<HTMLDivElement>(null), held = useRef(false);
+  const at = (e: PointerEvent) => {
+    const r = box.current!.getBoundingClientRect(), cl = (v: number) => Math.round(Math.max(-1, Math.min(1, v)) * 100) / 100;
+    onLive(cl(((e.clientX - r.left) / r.width) * 2 - 1), cl(((e.clientY - r.top) / r.height) * 2 - 1));
+  };
+  return (
+    <div class="turnpad" ref={box} title={t("face_pad_tip")}
+      onPointerDown={(e) => { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); held.current = true; begin(); at(e as unknown as PointerEvent); }}
+      onPointerMove={(e) => { if (held.current) at(e as unknown as PointerEvent); }}
+      onPointerUp={() => { if (held.current) { held.current = false; finish(); } }} onPointerCancel={() => { if (held.current) { held.current = false; finish(); } }}
+      onDblClick={() => { begin(); onLive(0, 0); finish(); }}>
+      <i class="cross" />
+      <b style={{ left: `${(turn + 1) * 50}%`, top: `${(nod + 1) * 50}%` }} />
+      <span class="num">{Math.round(turn * TURN_MAX)}° · {Math.round(nod * NOD_MAX)}°</span>
+    </div>
   );
 }

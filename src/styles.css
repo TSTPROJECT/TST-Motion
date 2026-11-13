@@ -372,3 +372,10 @@ button:disabled { cursor: default; opacity: .4; }
 .rng input { width: 100%; accent-color: var(--accent); }
 .rng .num { text-align: right; color: var(--fg); }
 .grp h3 > span { display: inline-flex; align-items: center; gap: 5px; }
+/* 3D head turn pad */
+.turnpad { position: relative; height: 110px; border-radius: 12px; border: 1px solid var(--line); background: radial-gradient(circle at 50% 50%, var(--surface) 0, var(--surface-2) 70%); touch-action: none; cursor: crosshair; }
+.turnpad .cross { position: absolute; inset: 0; background: linear-gradient(var(--line), var(--line)) 50% 0 / 1px 100% no-repeat, linear-gradient(var(--line), var(--line)) 0 50% / 100% 1px no-repeat; pointer-events: none; }
+.turnpad b { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: var(--accent); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); pointer-events: none; }
+.turnpad span { position: absolute; right: 8px; bottom: 6px; font-size: 11px; color: var(--muted); pointer-events: none; }
+.nf-row { display: flex; align-items: center; gap: 6px; }
+.depthseg { width: 100%; } .depthseg button { flex: 1; }

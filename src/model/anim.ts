@@ -112,7 +112,7 @@ export type SwayTable = Map<string, Float32Array>;
 export function depthOf(project: Project, l: Layer, head: Layer): number {
   if (l.depth !== undefined) return l.depth;
   const f = head.face!; const front = project.layers.indexOf(l) > project.layers.indexOf(head);
-  return (front ? 0.18 : -0.3) * f.rx;
+  return (front ? 0.18 : -0.18) * f.rx;
 }
 
 /** World matrices (layer image -> composition pixels) and combined opacity for every layer. */
