@@ -12,6 +12,7 @@ import { getLoaded, importFiles, ACCEPT } from "../io/assets";
 import { pickFile } from "./open";
 import { SWAY_DEFAULT } from "../model/physics";
 import { TextGroup } from "./TextGroup";
+import { MaskGroup, FxGroup } from "./LookGroups";
 
 export function KeyDot({ l, pr }: { l: Layer; pr: Chan }) {
   const keys = l.tracks[pr];
@@ -266,6 +267,8 @@ export function PropsPanel() {
             <p class="hint-s">{l.parent ? t("sway_hint") : t("sway_need_parent")}</p>
           </> : <p class="hint-s">{t("sway_off")}</p>}
         </div>}
+        {!l.camera && asset && <MaskGroup l={l} />}
+        {!l.camera && asset && <FxGroup l={l} />}
         {!l.camera && (l.pins?.length || tool.value === "pin") && (
           <div class="grp">
             <h3>{t("g_pins")}{l.pins?.length ? <button onClick={() => setOn((q) => { for (const pn of q.pins ?? []) for (const ax of ["x", "y"] as const) { delete q.tracks[pinChan(pn.id, ax)]; delete q.base[pinChan(pn.id, ax)]; } delete q.pins; }, true)}>{t("pins_clear")}</button> : null}</h3>

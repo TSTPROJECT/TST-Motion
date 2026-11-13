@@ -72,7 +72,7 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
       }
     }
     const S = s.solved;
-    s.renderer.draw({ project: p, world: S.world, alpha: S.alpha, follow: S.follow, deform: S.deform, pic: S.pic, ghosts }, dv, c.width, c.height);
+    s.renderer.draw({ project: p, frame: frame.value, world: S.world, alpha: S.alpha, follow: S.follow, deform: S.deform, pic: S.pic, ghosts }, dv, c.width, c.height);
     drawOverlay(p, s.solved);
   }
 

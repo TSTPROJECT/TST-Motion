@@ -102,7 +102,26 @@ export interface Layer {
    * "shake" = how far it shakes (pixels). Parts that follow the camera stay put on the screen.
    */
   camera?: { shakeSpeed: number };
+  /** clip to the shape of another part (e.g. an eyeball inside the white of the eye); invert = show only outside it */
+  mask?: { by: string; invert?: boolean };
+  /** look of the picture; the amounts are keyable values (see FX) */
+  fx?: Fx;
 }
+
+/** How a part mixes with what is behind it. */
+export type Blend = "normal" | "multiply" | "screen" | "add";
+/**
+ * Effects settings that do not change over time. The amounts that do are values with keys:
+ * "fx:blur" (px), "fx:shadow" and "fx:glow" (0..1 strength), "fx:bright", "fx:contrast", "fx:sat" (-1..1),
+ * "fx:hue" (degrees) and "fx:tint" (0..1 towards the tint colour).
+ */
+export interface Fx {
+  blend?: Blend;
+  shadow?: { dx: number; dy: number; blur: number; color: string };
+  glow?: { size: number; color: string };
+  tint?: string;
+}
+export const FX_CHANS = ["fx:blur", "fx:shadow", "fx:glow", "fx:bright", "fx:contrast", "fx:sat", "fx:hue", "fx:tint"] as const;
 
 export interface Asset {
   id: string;
