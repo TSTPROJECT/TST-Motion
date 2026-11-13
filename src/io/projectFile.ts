@@ -2,6 +2,7 @@
 import { unzip, zip, strToU8, strFromU8 } from "fflate";
 import type { Project } from "../model/types";
 import { getAssetBlob, getFontBlob } from "./assets";
+import { getSoundBlob } from "../audio/sound";
 import { uid } from "../model/store";
 
 const EXT: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "image/gif": "gif", "image/bmp": "bmp", "image/avif": "avif" };
@@ -17,6 +18,10 @@ export async function exportProjectFile(p: Project): Promise<Blob> {
   for (const f of p.fonts ?? []) {
     const b = getFontBlob(f.id); if (!b) continue;
     files[`fonts/${f.id}`] = new Uint8Array(await b.arrayBuffer());
+  }
+  for (const s of p.sounds ?? []) {
+    const b = getSoundBlob(s.id); if (!b) continue;
+    files[`sounds/${s.id}`] = [new Uint8Array(await b.arrayBuffer()), { level: 0 }]; // already compressed
   }
   const data = await new Promise<Uint8Array>((res, rej) => zip(files, { level: 6 }, (err, out) => (err ? rej(err) : res(out))));
   return new Blob([data as BlobPart], { type: "application/x-tst-motion" });
@@ -37,6 +42,10 @@ export async function readProjectFile(file: File): Promise<{ project: Project; b
   for (const f of project.fonts ?? []) {
     const e = entries[`fonts/${f.id}`];
     if (e) blobs.set(f.id, new Blob([e as BlobPart], { type: f.type }));
+  }
+  for (const s of project.sounds ?? []) {
+    const e = entries[`sounds/${s.id}`];
+    if (e) blobs.set(s.id, new Blob([e as BlobPart], { type: s.type }));
   }
   project.id = uid(); // opened files become their own copy, never overwrite a project on this device
   project.modified = Date.now();

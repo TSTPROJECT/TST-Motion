@@ -1,6 +1,6 @@
 [package]
 name = "tst-motion"
-version = "0.6.4"
+version = "0.6.5"
 description = "TST Motion: free 2D motion animation"
 license = "MIT"
 edition = "2021"

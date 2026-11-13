@@ -13,6 +13,8 @@ import { pickFile } from "./open";
 import { SWAY_DEFAULT } from "../model/physics";
 import { TextGroup } from "./TextGroup";
 import { MaskGroup, FxGroup, PathGroup } from "./LookGroups";
+import { SoundPanel, LipSyncGroup } from "./SoundGroups";
+import { selectedSound } from "../audio/sound";
 
 export function KeyDot({ l, pr }: { l: Layer; pr: Chan }) {
   const keys = l.tracks[pr];
@@ -67,6 +69,12 @@ export function PropsPanel() {
   const [linked, setLinked] = useState(true);
   const f = frame.value;
   if (!p) return null;
+  if (!l && selectedSound.value && p.sounds?.some((x) => x.id === selectedSound.value)) return (
+    <aside class="card pane pane-props" aria-label={t("props")}>
+      <div class="pane-h"><h2>{t("props")}</h2><span class="muted num" style={{ fontSize: "11.5px" }}>{t("frame_n", { n: f })}</span></div>
+      <div class="scroll"><SoundPanel id={selectedSound.value} adv={advanced.value} /></div>
+    </aside>
+  );
   if (!l) return (
     <aside class="card pane pane-props" aria-label={t("props")}>
       <div class="pane-h"><h2>{t("props")}</h2><span class="muted num" style={{ fontSize: "11.5px" }}>{t("frame_n", { n: f })}</span></div>
@@ -217,6 +225,7 @@ export function PropsPanel() {
             <p class="hint-s">{t("swap_hint")}</p>
           </div>
         )}
+        {asset && !l.text && <LipSyncGroup key={l.id} l={l} />}
         {asset && !l.text && (
           <div class="grp">
             <h3><span><Icon n="face" size={13} /> {t("g_face")}</span><Toggle on={!!l.face} label={t("g_face")} onChange={(on) => setOn((q) => {

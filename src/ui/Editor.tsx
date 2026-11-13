@@ -20,11 +20,16 @@ import { VersionsDialog } from "./Recovery";
 import { addTextLayer } from "./textOps";
 import { toast, installPrompt, installed, install, isIos } from "./shell";
 import { openFile, pickFile } from "./open";
+import { isAudioFile, startAudio, stopAudio } from "../audio/sound";
+import { addSound } from "./soundOps";
 
 async function importNow(files: File[]) {
   const p = project.value; if (!p || files.length === 0) return;
   const proj = files.find(isProjectFile);
   if (proj) { await saveNow(); await openFile(proj); return; }
+  const sounds = files.filter(isAudioFile);
+  for (const f of sounds) await addSound(f);
+  files = files.filter((f) => !isAudioFile(f)); if (!files.length) return;
   toast(t("importing"));
   const r = await importFiles(files, p);
   if (r.layers.length) {
@@ -35,6 +40,7 @@ async function importNow(files: File[]) {
   if (r.failed.length) toast(t("import_failed", { names: r.failed.slice(0, 3).join(", ") }), true);
 }
 export const pickImages = async () => importNow(await pickFile(ACCEPT, true));
+
 
 function openCut() {
   const l = project.value?.layers.find((x) => x.id === selected.value);
@@ -62,16 +68,17 @@ export function Editor() {
     if (!playing.value) return;
     const pp = project.value!; let start = performance.now(), f0 = frame.value, raf = 0;
     if (f0 >= pp.frames - 1) f0 = 0;
+    startAudio(f0);
     const tick = (now: number) => {
       const f = f0 + Math.floor(((now - start) / 1000) * pp.fps);
       if (f >= pp.frames) {
         if (!loop.value) { frame.value = pp.frames - 1; playing.value = false; return; }
-        start = now; f0 = 0; frame.value = 0;
+        start = now; f0 = 0; frame.value = 0; startAudio(0);
       } else if (f !== frame.value) frame.value = f;
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => { cancelAnimationFrame(raf); stopAudio(); };
   }), []);
 
   // files: drop anywhere, paste images

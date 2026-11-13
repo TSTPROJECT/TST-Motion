@@ -63,6 +63,8 @@ export interface TextStyle {
 }
 /** A font file added to a project, so the project looks the same on any computer. */
 export interface FontFile { id: string; family: string; name: string; type: string }
+/** A sound on the timeline: starts at a frame; `trim` seconds are skipped at its start; `dur` is the whole file's length. */
+export interface Sound { id: string; name: string; type: string; start: number; trim: number; dur: number; vol: number; mute?: boolean }
 /** A saved pose: every part's values, by layer id. */
 export interface SavedPose { id: string; name: string; values: Record<string, Record<Chan, number>> }
 
@@ -156,6 +158,8 @@ export interface Project {
   poses?: SavedPose[];
   /** font files added to this project */
   fonts?: FontFile[];
+  /** sounds on the timeline (voice, music, effects) */
+  sounds?: Sound[];
   created: number;
   modified: number;
 }

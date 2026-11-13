@@ -2,6 +2,7 @@
 import type { Asset, FontFile, Layer, Project } from "../model/types";
 import { makeLayer, uid } from "../model/store";
 import { getBlob, putBlob } from "./db";
+import { loadProjectSounds } from "../audio/sound";
 
 export interface Loaded { bitmap: ImageBitmap; mask: Uint8Array; mw: number; mh: number; url: string }
 const loaded = new Map<string, Loaded>();
@@ -87,6 +88,7 @@ export async function loadProjectAssets(p: Project, from?: Map<string, Blob>) {
     if (from) await putBlob(p.id, f.id, b);
     try { await registerFont(f, b); } catch { missing.push(f.name); }
   }));
+  missing.push(...(await loadProjectSounds(p, from)));
   bump();
   return missing;
 }

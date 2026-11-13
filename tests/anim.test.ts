@@ -114,3 +114,12 @@ test("motion path: a curve goes through every key, and orient faces the way it m
   near(headingAt(l, 10), 0, 1);
   assert.ok(headingAt(l, 2) > 0 && headingAt(l, 18) < 0);
 });
+
+test("lip sync: the mouth follows loudness, holds each shape at least 2 frames, and is -1 outside the sound", async () => {
+  const { mouthPlan } = await import("../src/audio/lip.ts");
+  const loud = new Float32Array([-1, 0, 0, 1, 1, 1, 0.4, 0.4, 0, 0, 0, -1]);
+  const m = Array.from(mouthPlan(loud, 0.5));
+  assert.equal(m[0], -1); assert.equal(m[11], -1);
+  assert.ok(m.includes(2) && m.includes(0));
+  for (let i = 1; i < 10; i++) if (m[i] !== m[i - 1] && m[i - 1] >= 0) assert.ok(i >= 3);
+});

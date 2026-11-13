@@ -1,7 +1,8 @@
 // Renders the animation frame by frame at full quality and writes every chosen format in one pass.
 // Each frame is drawn once (or twice when both see-through and solid formats are chosen),
 // encoded, and written to disk straight away, so even 4K × 105 s does not fill the RAM.
-import { Output, Mp4OutputFormat, WebMOutputFormat, StreamTarget, VideoSampleSource, VideoSample, QUALITY_HIGH, canEncodeVideo, type StreamTargetChunk } from "mediabunny";
+import { Output, Mp4OutputFormat, WebMOutputFormat, StreamTarget, VideoSampleSource, VideoSample, AudioBufferSource, QUALITY_HIGH, canEncodeVideo, canEncodeAudio, type StreamTargetChunk } from "mediabunny";
+import { mixdown, sliceBuffer, wavOf } from "../audio/sound";
 import type { Project } from "../model/types";
 import type { Mat } from "../model/anim";
 import { solveShown } from "../model/physics";
@@ -22,7 +23,7 @@ export interface ExportOptions {
   gifTransparent: boolean;        // see-through GIF, or the MP4 colour behind it
 }
 export interface Progress { frame: number; total: number }
-export interface OutFile { format: Format; name: string; size: number }
+export interface OutFile { format: Format | "wav"; name: string; size: number }
 
 /** Sizes offered for a project: from small to 4K, keeping the frame's shape. */
 export function exportSizes(p: Project) {
@@ -66,7 +67,7 @@ interface Job {
   written: () => number;
 }
 
-function videoJob(format: "mp4" | "webm", name: string, stream: FileSystemWritableFileStream, fps: number): Job {
+function videoJob(format: "mp4" | "webm", name: string, stream: FileSystemWritableFileStream, fps: number, audio: AudioBuffer | null, audioOk: boolean): Job {
   let size = 0;
   const writable = new WritableStream<StreamTargetChunk>({
     write: async (c) => { size = Math.max(size, c.position + c.data.length); await stream.write({ type: "write", position: c.position, data: c.data }); },
@@ -79,15 +80,25 @@ function videoJob(format: "mp4" | "webm", name: string, stream: FileSystemWritab
     ? { codec: "avc", quality: QUALITY_HIGH }
     : { codec: "vp9", quality: QUALITY_HIGH, alpha: "keep" });
   output.addVideoTrack(source, { frameRate: fps });
+  // sound: AAC in MP4, Opus in WebM; fed a little ahead of the pictures so the file stays interleaved
+  const aSrc = audio && audioOk ? new AudioBufferSource({ codec: format === "mp4" ? "aac" : "opus", quality: QUALITY_HIGH }) : null;
+  if (aSrc) output.addAudioTrack(aSrc);
+  let fed = 0;
+  const feed = async (until: number) => {
+    if (!aSrc || !audio) return;
+    const end = Math.min(audio.length, Math.ceil(until * audio.sampleRate));
+    while (fed < end) { const to = Math.min(end, fed + audio.sampleRate); await aSrc.add(sliceBuffer(audio, fed, to)); fed = to; }
+  };
   const started = output.start();
   return {
     format, name, stream, written: () => size,
     async frame(f, see, solid) {
       await started;
+      await feed((f + 1) / fps + 1);
       const sample = new VideoSample(format === "mp4" ? solid : see, { timestamp: f / fps, duration: 1 / fps });
       try { await source.add(sample); } finally { sample.close(); }
     },
-    async finish() { await output.finalize(); await stream.close(); },
+    async finish() { await feed(Infinity); await output.finalize(); await stream.close(); },
     async cancel() { await output.cancel().catch(() => {}); },
   };
 }
@@ -155,14 +166,25 @@ export async function runExport(project: Project, dir: FileSystemDirectoryHandle
   const k = W / p.w, view: Mat = [k, 0, 0, H / p.h, 0, 0];
 
   const jobs: Job[] = [];
+  let wavName: string | null = null;
   const cleanup = async () => {
     for (const j of jobs) { await j.cancel(); await j.stream.abort().catch(() => {}); await dir.removeEntry(j.name).catch(() => {}); }
+    if (wavName) await dir.removeEntry(wavName).catch(() => {});
   };
   try {
+    const audio = await mixdown(p);
+    const [aac, opus] = audio ? await Promise.all([canEncodeAudio("aac").catch(() => false), canEncodeAudio("opus").catch(() => false)]) : [false, false];
+    const extra: OutFile[] = [];
+    // MOV and GIF cannot carry sound: put it next to them as a WAV file
+    if (audio && o.formats.some((f) => f === "mov" || f === "gif")) {
+      wavName = await freeName(dir, baseName, "wav");
+      const wav = wavOf(audio), ws = await (await dir.getFileHandle(wavName, { create: true })).createWritable();
+      await ws.write(wav); await ws.close(); extra.push({ format: "wav", name: wavName, size: wav.size });
+    }
     for (const format of o.formats) {
       const name = await freeName(dir, baseName, format);
       const stream = await (await dir.getFileHandle(name, { create: true })).createWritable();
-      jobs.push(format === "mp4" || format === "webm" ? videoJob(format, name, stream, fps)
+      jobs.push(format === "mp4" || format === "webm" ? videoJob(format, name, stream, fps, audio, format === "mp4" ? aac : opus)
         : format === "mov" ? movJob(name, stream, W, H, fps) : gifJob(name, stream, o, fps));
     }
     for (let f = 0; f < total; f++) {
@@ -174,7 +196,7 @@ export async function runExport(project: Project, dir: FileSystemDirectoryHandle
       onProgress({ frame: f + 1, total });
     }
     for (const j of jobs) await j.finish();
-    return jobs.map((j) => ({ format: j.format, name: j.name, size: j.written() }));
+    return [...jobs.map((j) => ({ format: j.format, name: j.name, size: j.written() }) as OutFile), ...extra];
   } catch (e) {
     await cleanup();
     throw e;

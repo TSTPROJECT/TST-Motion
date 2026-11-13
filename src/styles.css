@@ -213,6 +213,14 @@ button:disabled { cursor: default; opacity: .4; }
 .endzone { position: absolute; top: 0; bottom: 0; right: 0; background: repeating-linear-gradient(-45deg, transparent 0 6px, var(--line) 6px 7px); pointer-events: none; }
 .tl-empty { padding: 14px; font-size: 12.5px; color: var(--muted); }
 .setup-veil .trk { opacity: .45; }
+.row.snd .lab::before { display: none; }
+.row.snd .lab svg { flex: none; color: var(--snd, #22b38a); }
+.clip { position: absolute; top: 3px; bottom: 3px; border-radius: 6px; background: color-mix(in srgb, var(--snd, #22b38a) 22%, transparent); border: 1px solid color-mix(in srgb, var(--snd, #22b38a) 70%, transparent); overflow: hidden; cursor: grab; touch-action: none; z-index: 1; }
+.clip svg { display: block; width: 100%; height: 100%; }
+.clip path { stroke: var(--snd, #22b38a); stroke-width: 1.4; fill: none; }
+.clip.mute { opacity: .4; filter: grayscale(1); }
+.row.snd.sel .clip { box-shadow: 0 0 0 2px var(--accent); }
+.setup-veil .row.snd .trk { opacity: 1; }
 
 .overlay { position: fixed; inset: 0; background: var(--scrim); display: grid; place-items: center; padding: 16px; z-index: 50; }
 .dlg { width: min(520px, 100%); max-height: calc(100% - 8px); overflow-y: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow-lg); display: flex; flex-direction: column; }
@@ -420,3 +428,9 @@ textarea.field.txt { height: auto; min-height: 64px; padding: 8px 10px; resize: 
 .swatch { position: relative; width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line-2); overflow: hidden; cursor: pointer; flex: none; }
 .swatch input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .swatch span { position: absolute; inset: 3px; border-radius: 5px; pointer-events: none; }
+/* lip sync: pick the closed / half / open pictures */
+.liprow { display: grid; grid-template-columns: 64px minmax(0, 1fr); align-items: center; gap: 6px; margin: 4px 0; }
+.lipthumbs { display: flex; gap: 4px; flex-wrap: wrap; }
+.lipthumbs button { width: 34px; height: 34px; padding: 2px; border-radius: 7px; border: 1px solid var(--line); background: var(--surface-2, var(--surface)); display: grid; place-items: center; cursor: pointer; }
+.lipthumbs button[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.lipthumbs img { max-width: 100%; max-height: 100%; object-fit: contain; }

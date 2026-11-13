@@ -133,6 +133,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
         </div>
       )}
 
+      {!!p.sounds?.some((x) => !x.mute) && <p class="hint-s" style={{ margin: "4px 0 0" }}><Icon n="music" size={12} /> {prefs.formats.some((f) => f === "mov" || f === "gif") ? t("x_sound_wav") : t("x_sound")}</p>}
       <p class="muted num" style={{ margin: "4px 0 0", fontSize: "12.5px" }}>{t("x_info", { fps: p.fps, sec: +(p.frames / p.fps).toFixed(2), frames: p.frames })}</p>
     </Modal>
   );
