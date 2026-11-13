@@ -6,6 +6,7 @@ import { Icon } from "./icons";
 import { toggleTheme, isDark, theme, installPrompt, installed, isIos, install, toast } from "./shell";
 import { confirmBox } from "./Dialogs";
 import { createProject, openSaved, openFile, pickFile } from "./open";
+import { BackupsDialog, CrashNote } from "./Recovery";
 
 const PRESETS: Array<{ k: string; w: number; h: number; label: () => string }> = [
   { k: "9:16", w: 1080, h: 1920, label: () => t("preset_916") },
@@ -30,6 +31,7 @@ export function TopToggles() {
 export function Home() {
   const [list, setList] = useState<ProjectMeta[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [backups, setBackups] = useState(false);
   const refresh = () => listProjects().then(setList).catch(() => setList([]));
   useEffect(() => { refresh(); }, []);
   const run = async (fn: () => Promise<void>) => { if (busy) return; setBusy(true); try { await fn(); } finally { setBusy(false); } };
@@ -47,6 +49,7 @@ export function Home() {
           <TopToggles />
         </header>
 
+        <CrashNote list={list} />
         <section>
           <h2>{t("new_project")}</h2>
           <div class="presets">
@@ -66,7 +69,10 @@ export function Home() {
         <section>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", marginBottom: "12px", flexWrap: "wrap" }}>
             <h2 style={{ margin: 0 }}>{t("recent")}</h2>
-            <button class="btn" disabled={busy} onClick={async () => { const [f] = await pickFile(".tstm,application/zip", false); if (f) run(() => openFile(f)); }}><Icon n="folder" />{t("open_file")}</button>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              <button class="btn" disabled={busy} onClick={() => setBackups(true)}><Icon n="lifebuoy" />{t("backups")}</button>
+              <button class="btn" disabled={busy} onClick={async () => { const [f] = await pickFile(".tstm,application/zip", false); if (f) run(() => openFile(f)); }}><Icon n="folder" />{t("open_file")}</button>
+            </div>
           </div>
           {list && list.length === 0 && <p class="empty-list">{t("no_recent")}</p>}
           <div class="recent">
@@ -89,6 +95,7 @@ export function Home() {
           <p>{t("phase_note")} · MIT</p>
         </section>
       </div>
+      {backups && <BackupsDialog onClose={() => setBackups(false)} />}
     </main>
   );
 }

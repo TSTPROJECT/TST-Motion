@@ -4,7 +4,7 @@ import { effect } from "@preact/signals";
 import { project, rev, frame, playing, loop, selected, mode, tool, tab, advanced, setAdvanced, canUndo, canRedo, undo, redo, addLayers, edit, deleteLayer, duplicateLayer, toggleKeys, closeProject, type Mode, type Tab } from "../model/store";
 import { importFiles, isProjectFile, ACCEPT } from "../io/assets";
 import { exportProjectFile, safeFileName, saveBlobAs } from "../io/projectFile";
-import { saving, saveNow } from "../io/autosave";
+import { saving, saveNow, projectClosing } from "../io/autosave";
 import { askPersistent } from "../io/db";
 import { t } from "../i18n";
 import { Icon } from "./icons";
@@ -16,6 +16,7 @@ import { SettingsDialog, settingsOpen, confirmBox } from "./Dialogs";
 import { ExportDialog } from "./ExportDialog";
 import { CutDialog, cutLayer } from "./CutDialog";
 import { TopToggles } from "./Home";
+import { VersionsDialog } from "./Recovery";
 import { toast, installPrompt, installed, install, isIos } from "./shell";
 import { openFile, pickFile } from "./open";
 
@@ -52,6 +53,7 @@ export function Editor() {
   const [dropping, setDropping] = useState(false);
   const [menu, setMenu] = useState(false);
   const [exportInfo, setExportInfo] = useState(false);
+  const [versions, setVersions] = useState(false);
 
   // playback
   useEffect(() => effect(() => {
@@ -127,7 +129,7 @@ export function Editor() {
   }, []);
 
   const setMode = (m: Mode) => { mode.value = m; toast(m === "setup" ? t("mode_setup_hint") : t("mode_animate_hint")); };
-  const goHome = async () => { await saveNow(); closeProject(); };
+  const goHome = async () => { await projectClosing(); closeProject(); };
   const setTab = (x: Tab) => (tab.value = x);
 
   return (
@@ -165,6 +167,7 @@ export function Editor() {
                 <hr />
                 <button onClick={saveFile}><Icon n="save" />{t("save_file")}</button>
                 <button onClick={async () => { const [f] = await pickFile(".tstm,application/zip", false); if (f) { await saveNow(); await openFile(f); } }}><Icon n="folder" />{t("open_file")}</button>
+                <button onClick={() => setVersions(true)}><Icon n="history" />{t("versions")}</button>
                 <button onClick={() => (settingsOpen.value = true)}><Icon n="settings" />{t("settings")}</button>
                 {!installed.value && (installPrompt.value || isIos) && <button onClick={async () => { if (installPrompt.value) await install(); else toast(t("install_ios")); }}><Icon n="install" />{t("install")}</button>}
                 <hr />
@@ -190,6 +193,7 @@ export function Editor() {
       <Timeline />
 
       {settingsOpen.value && <SettingsDialog />}
+      {versions && <VersionsDialog onClose={() => setVersions(false)} />}
       {exportInfo && <ExportDialog onClose={() => setExportInfo(false)} />}
       {cutLayer.value && <CutDialog key={cutLayer.value} />}
     </div>
