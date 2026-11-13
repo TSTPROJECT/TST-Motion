@@ -280,6 +280,15 @@ const th = {
   fx_tint_amt: "ย้อมสีมากน้อย",
   fx_hint: "ทุกค่าใส่คีย์ได้ (จุดสีเหลี่ยมข้างชื่อ) เช่น เบลอแล้วค่อยๆ ชัด หรือแสงกะพริบ ลากชื่อซ้ายขวาเพื่อปรับเร็ว",
   mask_invert_short: "กลับด้าน (เห็นเฉพาะด้านนอก)",
+  g_path: "เส้นทางเคลื่อนที่",
+  path_show: "แสดงเส้นทางบนภาพ",
+  path_curve: "เส้นโค้งผ่านจุด",
+  path_orient: "หันตามทาง",
+  path_sketch: "วาดเส้นทางด้วยมือ",
+  path_sketch_cancel: "ยกเลิกการวาด",
+  tip_sketch: "กดค้างแล้วลากบนภาพ — เวลาจะเดินไปเองตามความเร็วจริง ชิ้นงานจะวิ่งตามมือ ปล่อยเมื่อเสร็จ",
+  path_hint: "ลากจุดสี่เหลี่ยมบนเส้นเพื่อแก้ตำแหน่งของคีย์นั้น จุดเล็กชิดกัน = ช้า ห่างกัน = เร็ว",
+  path_none: "ย้ายชิ้นงานในเฟรมต่างๆ (ใส่คีย์ตำแหน่ง 2 จุดขึ้นไป) แล้วเส้นทางจะขึ้นมาให้เห็น หรือกด \"วาดเส้นทางด้วยมือ\"",
 };
 export type Key = keyof typeof th;
 const en: Record<Key, string> = {
@@ -552,6 +561,15 @@ const en: Record<Key, string> = {
   fx_tint_amt: "Tint amount",
   fx_hint: "Every value can have keys (the diamond by its name), e.g. blur that sharpens, or a flashing glow. Drag a label left or right to adjust quickly",
   mask_invert_short: "Invert (outside only)",
+  g_path: "Motion path",
+  path_show: "Show the path on the canvas",
+  path_curve: "Smooth curve",
+  path_orient: "Face the way it goes",
+  path_sketch: "Draw the path by hand",
+  path_sketch_cancel: "Cancel drawing",
+  tip_sketch: "Hold and drag on the canvas: time runs at real speed and the part follows your hand. Let go to finish.",
+  path_hint: "Drag a square on the line to move that key. Dots close together = slow, far apart = fast.",
+  path_none: "Move the part at two or more frames and its path appears, or use \"Draw the path by hand\".",
 };
 const dict = { th, en };
 export function t(k: Key, vars?: Record<string, string | number>) {

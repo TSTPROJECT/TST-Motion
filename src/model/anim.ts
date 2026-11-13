@@ -79,14 +79,46 @@ export function pictureAt(layer: Layer, frame: number): string | null {
 
 export interface Pose { x: number; y: number; rot: number; sx: number; sy: number; o: number }
 export function poseAt(layer: Layer, frame: number): Pose {
-  return {
-    x: valueAt(layer, "x", frame),
-    y: valueAt(layer, "y", frame),
-    rot: valueAt(layer, "rot", frame),
-    sx: valueAt(layer, "sx", frame),
-    sy: valueAt(layer, "sy", frame),
-    o: valueAt(layer, "o", frame),
-  };
+  const [x, y] = posAt(layer, frame);
+  let rot = valueAt(layer, "rot", frame);
+  if (layer.path?.orient) rot += headingAt(layer, frame);
+  return { x, y, rot, sx: valueAt(layer, "sx", frame), sy: valueAt(layer, "sy", frame), o: valueAt(layer, "o", frame) };
+}
+
+// ---------- motion path ----------
+/** Frames where the position has a key (x or y), in order. */
+export function pathFrames(l: Layer): number[] {
+  const s = new Set<number>();
+  l.tracks.x?.forEach((k) => s.add(k.f)); l.tracks.y?.forEach((k) => s.add(k.f));
+  return [...s].sort((a, b) => a - b);
+}
+const cr = (a: number, b: number, c: number, d: number, u: number) =>
+  0.5 * (2 * b + (-a + c) * u + (2 * a - 5 * b + 4 * c - d) * u * u + (-a + 3 * b - 3 * c + d) * u * u * u);
+/** Position (x, y) at a frame: straight between keys, or along a smooth curve through them (path.curve). */
+export function posAt(l: Layer, frame: number): [number, number] {
+  const flat = (): [number, number] => [valueAt(l, "x", frame), valueAt(l, "y", frame)];
+  if (!l.path?.curve) return flat();
+  const fs = pathFrames(l); if (fs.length < 3 || frame <= fs[0] || frame >= fs[fs.length - 1]) return flat();
+  let i = 0; while (i < fs.length - 2 && fs[i + 1] <= frame) i++;
+  const P = (j: number): [number, number] => [valueAt(l, "x", fs[j]), valueAt(l, "y", fs[j])];
+  const k = l.tracks.x?.find((q) => q.f === fs[i]) ?? l.tracks.y?.find((q) => q.f === fs[i]);
+  if (k?.e === "hold") return P(i);
+  const u = (k ? easeFn(k) : EASES.smooth)((frame - fs[i]) / (fs[i + 1] - fs[i]));
+  const p1 = P(i), p2 = P(i + 1);
+  const p0 = i > 0 ? P(i - 1) : [2 * p1[0] - p2[0], 2 * p1[1] - p2[1]];
+  const p3 = i + 2 < fs.length ? P(i + 2) : [2 * p2[0] - p1[0], 2 * p2[1] - p1[1]];
+  return [cr(p0[0], p1[0], p2[0], p3[0], u), cr(p0[1], p1[1], p2[1], p3[1], u)];
+}
+/** Direction of travel in degrees (for path.orient); keeps facing the last way it went when it stops. */
+export function headingAt(l: Layer, frame: number): number {
+  const ang = (a: [number, number], b: [number, number]) => (Math.hypot(b[0] - a[0], b[1] - a[1]) > 1e-3 ? (Math.atan2(b[1] - a[1], b[0] - a[0]) * 180) / Math.PI : null);
+  const here = posAt(l, frame);
+  const d = ang(posAt(l, frame - 0.5), posAt(l, frame + 0.5)); if (d !== null) return d;
+  const fs = pathFrames(l);
+  // standing still: face the way it last moved (or the way it is about to move)
+  for (let j = fs.length - 1; j >= 0; j--) if (fs[j] < frame) { const a = ang(posAt(l, fs[j] - 0.5), posAt(l, fs[j] + 0.5)) ?? ang(posAt(l, fs[j]), here); if (a !== null) return a; }
+  for (const f of fs) if (f > frame) { const a = ang(here, posAt(l, f)); if (a !== null) return a; }
+  return 0;
 }
 
 /** 2D affine matrix [a c e; b d f; 0 0 1], same layout as canvas setTransform. */

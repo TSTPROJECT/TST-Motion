@@ -1,8 +1,8 @@
 // The canvas: draws the frame, lets you pick and drag parts, pan and zoom.
 import { useEffect, useRef, useState } from "preact/hooks";
 import { effect } from "@preact/signals";
-import { project, rev, frame, selected, tool, mode, onion, camView, begin, live, finish, edit, writeProp, movePivotLive, uid, type Tool } from "../model/store";
-import { apply, invert, mul, valueAt, type Mat, type Solved } from "../model/anim";
+import { project, rev, frame, selected, tool, mode, onion, camView, showPath, sketchArm, playing, writeKey, begin, live, finish, edit, writeProp, movePivotLive, uid, type Tool } from "../model/store";
+import { apply, invert, mul, valueAt, pathFrames, posAt, headingAt, cameraOf, cameraMatrix, type Mat, type Solved } from "../model/anim";
 import { solveShown } from "../model/physics";
 import { unpinPoint, facePoint, type P } from "../model/warp";
 import { pinChan } from "../model/types";
@@ -24,14 +24,16 @@ type Drag =
   /** pin: drag a pin to bend the picture */
   | { k: "pin"; id: string; pin: string; inv: Mat; rx: number; ry: number }
   /** pose: the held part (and the one above it) turn so the held point follows the pointer */
-  | { k: "ik"; ids: string[]; r0: number[]; sign: number[]; j1: [number, number]; j2: [number, number] | null; e0: [number, number] };
+  | { k: "ik"; ids: string[]; r0: number[]; sign: number[]; j1: [number, number]; j2: [number, number] | null; e0: [number, number] }
+  /** sketch: the part follows the pointer while time runs; keys are written as it goes */
+  | { k: "sketch"; id: string; f0: number; t0: number; last: number; at: [number, number]; trail: Array<[number, number]>; raf: number };
 
 const HANDLE = 22; // touch-friendly hit radius in CSS px
 
 export function Stage({ onImport, dropping }: { onImport: () => void; dropping: boolean }) {
   const wrap = useRef<HTMLDivElement>(null), cv = useRef<HTMLCanvasElement>(null), ov = useRef<HTMLCanvasElement>(null);
   const [zoomPct, setZoomPct] = useState(100);
-  const st = useRef({ z: 1, ox: 0, oy: 0, w: 0, h: 0, dpr: 1, fitted: false, auto: true, raf: 0, renderer: null as Renderer | null, solved: null as Solved | null, drag: null as Drag | null, pointers: new Map<number, [number, number]>(), pinch: null as null | { d: number; mx: number; my: number; z: number; ox: number; oy: number }, space: false });
+  const st = useRef({ z: 1, ox: 0, oy: 0, w: 0, h: 0, dpr: 1, fitted: false, auto: true, raf: 0, renderer: null as Renderer | null, solved: null as Solved | null, path: null as null | { key: string; pts: Array<[number, number]>; keys: number[] }, drag: null as Drag | null, pointers: new Map<number, [number, number]>(), pinch: null as null | { d: number; mx: number; my: number; z: number; ox: number; oy: number }, space: false });
 
   const view = (): Mat => { const s = st.current; return [s.z, 0, 0, s.z, s.ox, s.oy]; };
   const toComp = (x: number, y: number) => apply(invert(view()), x, y);
@@ -101,6 +103,62 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
     return { corners, piv, topMid, rot, center };
   }
 
+  /** Where the part's joint is in the composition at every frame (cached until something changes). */
+  function pathOf(p: Project, l: Layer) {
+    const s = st.current, key = `${rev.value}|${l.id}|${camView.value}|${p.frames}`;
+    if (s.path?.key === key) return s.path;
+    const keys = pathFrames(l), pts: Array<[number, number]> = [];
+    if (keys.length >= 2) {
+      // a part on its own, without a camera view, needs no full solve per frame
+      const plain = !l.parent && !(camView.value && cameraOf(p));
+      for (let f = 0; f < p.frames; f++) {
+        const m = plain ? null : solveShown(p, f, camView.value).world.get(l.id);
+        pts.push(m ? apply(m, l.px, l.py) : posAt(l, f));
+      }
+    }
+    return (s.path = { key, pts, keys });
+  }
+  /** Motion path: a line through where the joint goes, a dot per frame (close dots = slow), a square per key. */
+  function drawPath(g: CanvasRenderingContext2D, p: Project, l: Layer, accent: string) {
+    if (mode.value !== "animate" || !showPath.value || l.camera && camView.value || (tool.value !== "move" && tool.value !== "rotate")) return;
+    const d = st.current.drag;
+    if (d?.k === "sketch") {
+      g.save(); g.strokeStyle = "#ff5a3c"; g.lineWidth = 2.5; g.lineCap = g.lineJoin = "round";
+      g.beginPath(); d.trail.forEach(([x, y], i) => { const [sx, sy] = apply(view(), x, y); if (i) g.lineTo(sx, sy); else g.moveTo(sx, sy); }); g.stroke(); g.restore();
+      return;
+    }
+    const P = pathOf(p, l); if (!P.pts.length) return;
+    const scr = P.pts.map(([x, y]) => apply(view(), x, y));
+    g.save(); g.lineCap = g.lineJoin = "round";
+    g.strokeStyle = "rgba(20,24,33,.45)"; g.lineWidth = 4; g.beginPath(); scr.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.stroke();
+    g.strokeStyle = accent; g.lineWidth = 2; g.globalAlpha = .9; g.stroke();
+    g.globalAlpha = 1; g.fillStyle = accent;
+    for (const [x, y] of scr) { g.beginPath(); g.arc(x, y, 1.8, 0, Math.PI * 2); g.fill(); }
+    for (const f of P.keys) {
+      const q = scr[Math.min(scr.length - 1, Math.max(0, f))]; if (!q) continue;
+      const now = f === frame.value;
+      g.fillStyle = now ? accent : "#fff"; g.strokeStyle = now ? "#fff" : accent; g.lineWidth = 2;
+      g.save(); g.translate(q[0], q[1]); g.rotate(Math.PI / 4); g.fillRect(-5, -5, 10, 10); g.strokeRect(-5, -5, 10, 10); g.restore();
+    }
+    g.restore();
+  }
+  /** Path key under the pointer (screen px), if any. */
+  function pathKeyAt(p: Project, l: Layer, x: number, y: number): number | null {
+    if (mode.value !== "animate" || !showPath.value || l.camera && camView.value) return null;
+    const P = pathOf(p, l); let best: number | null = null, bd = 12;
+    for (const f of P.keys) { const q = P.pts[f]; if (!q) continue; const [sx, sy] = apply(view(), ...q), dd = Math.hypot(sx - x, sy - y); if (dd <= bd) { bd = dd; best = f; } }
+    return best;
+  }
+  /** The parent's world matrix for moving a part: its parent, or the camera when looking through it. */
+  function parentWorld(l: Layer, S: Solved, f = frame.value): Mat {
+    const p = project.value!;
+    if (l.parent) return S.world.get(l.parent) ?? [1, 0, 0, 1, 0, 0];
+    const cam = cameraOf(p);
+    return camView.value && cam && !l.camera ? cameraMatrix(p, cam, f) : [1, 0, 0, 1, 0, 0];
+  }
+  /** Own turn of a part, without the extra turn from facing along its path. */
+  const ownRot = (l: Layer, S: Solved) => S.pose.get(l.id)!.rot - (l.path?.orient ? headingAt(l, frame.value) : 0);
+
   function drawOverlay(p: Project, S: Solved) {
     const s = st.current, o = ov.current!, g = o.getContext("2d")!;
     const css = getComputedStyle(document.documentElement);
@@ -165,6 +223,7 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
     }
     const l = p.layers.find((x) => x.id === selected.value);
     if (!l || !l.visible) return;
+    drawPath(g, p, l, accent);
     const h = handlesOf(p, l, S); if (!h) return;
     // link to the part it follows
     if (l.parent) {
@@ -207,9 +266,20 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
 
   function startDrag(x: number, y: number, e: PointerEvent) {
     const s = st.current, p = project.value!;
-    const S = (s.solved = solveShown(p, frame.value)), cur = tool.value as Tool; // fresh: the last paint may be behind
+    let S = (s.solved = solveShown(p, frame.value, camView.value)), cur = tool.value as Tool; // fresh: the last paint may be behind
     if (cur === "hand" || e.button === 1 || s.space) { s.drag = { k: "pan", sx: x, sy: y, ox: s.ox, oy: s.oy }; return; }
     const sel = p.layers.find((l) => l.id === selected.value);
+    if (sketchArm.value && sel && !sel.locked && mode.value === "animate") return sketchDown(sel, x, y);
+    // a key square on the motion path: go to that frame and move the part there
+    if (sel && sel.visible && !sel.locked && (cur === "move" || cur === "rotate")) {
+      const kf = pathKeyAt(p, sel, x, y);
+      if (kf !== null) {
+        playing.value = false; frame.value = kf; S = s.solved = solveShown(p, kf, camView.value);
+        const pose = S.pose.get(sel.id)!;
+        begin(); s.drag = { k: "move", id: sel.id, p0: toComp(x, y), x0: pose.x, y0: pose.y, inv: invert(lin(parentWorld(sel, S))) };
+        return;
+      }
+    }
     if (sel?.camera && !sel.locked) return camDown(sel, x, y);
     if (cur === "pin") return pinDown(sel, x, y, e);
     if (sel && sel.visible && !sel.locked) {
@@ -235,8 +305,7 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
       begin(); const inv = invert(S.world.get(hit.id)!); s.drag = { k: "pivot", id: hit.id, inv };
       const [lx, ly] = apply(inv, ...toComp(x, y)); movePivotLive(hit.id, lx, ly); return;
     }
-    const pose = S.pose.get(hit.id)!, parentM = hit.parent ? S.world.get(hit.parent) : null;
-    const inv = parentM ? invert([parentM[0], parentM[1], parentM[2], parentM[3], 0, 0]) : ([1, 0, 0, 1, 0, 0] as Mat);
+    const pose = S.pose.get(hit.id)!, inv = invert(lin(parentWorld(hit, S)));
     begin(); s.drag = { k: "move", id: hit.id, p0: toComp(x, y), x0: pose.x, y0: pose.y, inv };
   }
   /**
@@ -297,7 +366,7 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
     const s = st.current, S = s.solved!, m = S.world.get(l.id)!;
     const c = apply(m, l.px, l.py), pt = toComp(x, y), parentM = l.parent ? S.world.get(l.parent) : null;
     const sign = parentM && parentM[0] * parentM[3] - parentM[1] * parentM[2] < 0 ? -1 : 1;
-    begin(); s.drag = { k: "rotate", id: l.id, c, last: Math.atan2(pt[1] - c[1], pt[0] - c[0]), acc: 0, r0: S.pose.get(l.id)!.rot, sign };
+    begin(); s.drag = { k: "rotate", id: l.id, c, last: Math.atan2(pt[1] - c[1], pt[0] - c[0]), acc: 0, r0: ownRot(l, S), sign };
   }
   /** Pose: hold a part; it turns round its joint, and when the part above it is not the root (the body),
    *  that one turns too, so pulling a forearm bends the elbow and swings the upper arm. */
@@ -310,12 +379,59 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
     const chain = two ? [l, par!] : [l];
     begin();
     s.drag = {
-      k: "ik", ids: chain.map((q) => q.id), r0: chain.map((q) => S.pose.get(q.id)!.rot), sign: chain.map((q) => mirror(q.parent)),
+      k: "ik", ids: chain.map((q) => q.id), r0: chain.map((q) => ownRot(q, S)), sign: chain.map((q) => mirror(q.parent)),
       j1: two ? pivotOf(par!) : pivotOf(l), j2: two ? pivotOf(l) : null, e0: toComp(x, y),
     };
   }
+  /**
+   * Motion sketch: hold and drag; time runs at the real speed from the current frame and the part follows
+   * the pointer. Letting go keeps a key every few frames on a smooth curve.
+   */
+  function sketchDown(l: Layer, x: number, y: number) {
+    const s = st.current, f0 = frame.value;
+    playing.value = false; begin();
+    const d: Drag = { k: "sketch", id: l.id, f0, t0: performance.now(), last: f0 - 1, at: toComp(x, y), trail: [], raf: 0 };
+    s.drag = d;
+    // clear what was there from here on, so the old path does not pull on the new one
+    live((p) => {
+      const q = p.layers.find((z) => z.id === l.id); if (!q) return;
+      for (const ch of ["x", "y"] as const) if (q.tracks[ch]) q.tracks[ch] = q.tracks[ch]!.filter((k) => k.f < f0);
+    });
+    const tick = () => {
+      if (s.drag !== d) return;
+      const p = project.value!, f = Math.min(p.frames - 1, d.f0 + Math.floor(((performance.now() - d.t0) / 1000) * p.fps));
+      if (f > d.last) {
+        live((pp) => {
+          const q = pp.layers.find((z) => z.id === d.id); if (!q) return;
+          for (let g = d.last + 1; g <= f; g++) {
+            // the pointer is in the composition; keys are in the parent's space at that frame
+            const par = q.parent || (camView.value && cameraOf(pp)) ? parentWorld(q, solveShown(pp, g, camView.value), g) : null;
+            const [lx, ly] = par ? apply(invert(par), ...d.at) : d.at;
+            writeKey(q, "x", round2(lx), g, "linear"); writeKey(q, "y", round2(ly), g, "linear");
+          }
+        });
+        d.last = f; frame.value = f; d.trail.push(d.at);
+      }
+      if (f >= p.frames - 1) { endDrag(); return; }
+      d.raf = requestAnimationFrame(tick);
+    };
+    tick();
+  }
+  function endSketch(d: Extract<Drag, { k: "sketch" }>) {
+    cancelAnimationFrame(d.raf);
+    live((p) => {
+      const q = p.layers.find((z) => z.id === d.id); if (!q) return;
+      // keep a key every 3 frames (and the last one), on a curve through them
+      const keep = (k: { f: number }) => k.f < d.f0 || k.f > d.last || (k.f - d.f0) % 3 === 0 || k.f === d.last;
+      for (const ch of ["x", "y"] as const) if (q.tracks[ch]) q.tracks[ch] = q.tracks[ch]!.filter(keep);
+      if (d.last > d.f0) q.path = { ...q.path, curve: true };
+    });
+    sketchArm.value = false;
+    finish();
+  }
   function moveDrag(x: number, y: number, e: PointerEvent) {
     const s = st.current, d = s.drag; if (!d) return;
+    if (d.k === "sketch") { d.at = toComp(x, y); return; }
     if (d.k === "pan") { s.auto = false; s.ox = d.ox + x - d.sx; s.oy = d.oy + y - d.sy; schedule(); return; }
     const [cx, cy] = toComp(x, y);
     live((p) => {
@@ -351,6 +467,7 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
   }
   function endDrag() {
     const s = st.current, d = s.drag; s.drag = null;
+    if (d?.k === "sketch") { endSketch(d); return; }
     if (d && d.k !== "pan") finish();
   }
 
@@ -364,7 +481,7 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
       if ((!s.fitted || s.auto) && project.value) { s.fitted = true; fit(); } else schedule(); // keep fitting until the user zooms or pans
     });
     ro.observe(w);
-    const stop = effect(() => { rev.value; frame.value; selected.value; tool.value; mode.value; theme.value; onion.value; camView.value; schedule(); });
+    const stop = effect(() => { rev.value; frame.value; selected.value; tool.value; mode.value; theme.value; onion.value; camView.value; showPath.value; schedule(); });
     let lastPid = project.value?.id;
     const stopFit = effect(() => { const id = project.value?.id; if (id !== lastPid) { lastPid = id; s.fitted = false; if (s.w) { s.fitted = true; fit(); } } });
     onAssetsChanged(schedule);
@@ -432,14 +549,14 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
   const empty = !!p && p.layers.length === 0;
   const setBg = (bg: Background) => { if (p && p.bg !== bg) { begin(); live((pp) => (pp.bg = bg)); finish(); } };
   const tools: Array<[Tool, string, string]> = [["move", "move", t("t_move")], ["rotate", "rotate", t("t_rotate")], ["pose", "figure", t("t_pose")], ["pin", "pin", t("t_pin")], ["pivot", "pivot", t("t_pivot")], ["hand", "hand", t("t_hand")]];
-  const cursor = tool.value === "hand" ? "grab" : tool.value === "pivot" || tool.value === "pin" ? "crosshair" : "default";
+  const cursor = sketchArm.value ? "crosshair" : tool.value === "hand" ? "grab" : tool.value === "pivot" || tool.value === "pin" ? "crosshair" : "default";
 
   return (
     <section class="stage" ref={wrap} aria-label="Canvas">
       <canvas ref={cv} />
       <canvas ref={ov} style={{ cursor }} />
       <div class="tipbar">
-        <div class="tip">{t(("tip_" + tool.value) as "tip_move")}</div>
+        <div class={"tip" + (sketchArm.value ? " hot" : "")}>{sketchArm.value ? t("tip_sketch") : t(("tip_" + tool.value) as "tip_move")}</div>
         <div class="zoombox">
           <button class="ibtn ghost" title="-" aria-label="Zoom out" onClick={() => zoomAt(1 / 1.25, st.current.w / 2, st.current.h / 2)}><Icon n="minus" /></button>
           <span class="num">{zoomPct}%</span>
@@ -475,3 +592,4 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
 const sub = (a: [number, number], b: [number, number]): [number, number] => [a[0] - b[0], a[1] - b[1]];
 const round2 = (v: number) => Math.round(v * 100) / 100;
 const round3 = (v: number) => Math.round(v * 1000) / 1000;
+const lin = (m: Mat): Mat => [m[0], m[1], m[2], m[3], 0, 0];

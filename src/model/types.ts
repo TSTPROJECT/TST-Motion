@@ -106,6 +106,8 @@ export interface Layer {
   mask?: { by: string; invert?: boolean };
   /** look of the picture; the amounts are keyable values (see FX) */
   fx?: Fx;
+  /** motion path: curve = the position flows through its keys on a smooth curve; orient = turns to face where it goes */
+  path?: { curve?: boolean; orient?: boolean };
 }
 
 /** How a part mixes with what is behind it. */

@@ -12,7 +12,7 @@ import { getLoaded, importFiles, ACCEPT } from "../io/assets";
 import { pickFile } from "./open";
 import { SWAY_DEFAULT } from "../model/physics";
 import { TextGroup } from "./TextGroup";
-import { MaskGroup, FxGroup } from "./LookGroups";
+import { MaskGroup, FxGroup, PathGroup } from "./LookGroups";
 
 export function KeyDot({ l, pr }: { l: Layer; pr: Chan }) {
   const keys = l.tracks[pr];
@@ -267,6 +267,7 @@ export function PropsPanel() {
             <p class="hint-s">{l.parent ? t("sway_hint") : t("sway_need_parent")}</p>
           </> : <p class="hint-s">{t("sway_off")}</p>}
         </div>}
+        <PathGroup l={l} />
         {!l.camera && asset && <MaskGroup l={l} />}
         {!l.camera && asset && <FxGroup l={l} />}
         {!l.camera && (l.pins?.length || tool.value === "pin") && (

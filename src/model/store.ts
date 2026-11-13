@@ -26,6 +26,10 @@ export const advanced = signal(advSaved);
 export function setAdvanced(v: boolean) { advanced.value = v; try { localStorage.setItem("tstm-adv", v ? "1" : "0"); } catch { /* private mode */ } }
 /** Look through the camera on the canvas (what the video shows); off = the whole composition with the camera's frame. */
 export const camView = signal(true);
+/** Show the selected part's motion path on the canvas. */
+export const showPath = signal(true);
+/** Motion sketch is armed: the next drag on the canvas records the selected part's path in real time. */
+export const sketchArm = signal(false);
 /** Onion skin: show nearby frames faintly. */
 export const onion = signal({ on: false, before: 2, after: 2, step: 3 });
 

@@ -1,6 +1,6 @@
-// Properties: mask (clip to another part's shape) and effects (blend, blur, shadow, glow, colours).
-import { project, frame, mode, advanced, edit, live, writeProp } from "../model/store";
-import { valueAt } from "../model/anim";
+// Properties: motion path, mask (clip to another part's shape) and effects (blend, blur, shadow, glow, colours).
+import { project, frame, mode, advanced, edit, live, writeProp, showPath, sketchArm, tool } from "../model/store";
+import { valueAt, pathFrames } from "../model/anim";
 import type { Blend, Chan, Fx, Layer } from "../model/types";
 import { t, type Key as TKey } from "../i18n";
 import { Icon } from "./icons";
@@ -93,6 +93,28 @@ export function FxGroup({ l }: { l: Layer }) {
       </div>}
       {adv && fx.tint && <Ch l={l} label={t("fx_tint_amt")} ch="fx:tint" k={100} suffix="%" lo={0} hi={100} />}
       <p class="hint-s">{t("fx_hint")}</p>
+    </div>
+  );
+}
+
+/** Motion path: smooth curve through the keys, face the way it goes, draw the path by hand. */
+export function PathGroup({ l }: { l: Layer }) {
+  if (mode.value !== "animate") return null;
+  const n = pathFrames(l).length, pa = l.path ?? {};
+  const setPath = (k: "curve" | "orient", on: boolean) => setOn(l.id, (x) => { const q = { ...x.path, [k]: on || undefined }; if (!q.curve && !q.orient) delete x.path; else x.path = q; }, true);
+  return (
+    <div class="grp">
+      <h3><span><Icon n="path" size={13} /> {t("g_path")}</span><Toggle on={showPath.value} label={t("path_show")} onChange={(on) => (showPath.value = on)} /></h3>
+      <div class="txtrow">
+        <span class="muted lbl">{t("path_curve")}</span>
+        <Toggle on={!!pa.curve} label={t("path_curve")} onChange={(on) => setPath("curve", on)} />
+        {!l.camera && <><span class="muted lbl">{t("path_orient")}</span>
+        <Toggle on={!!pa.orient} label={t("path_orient")} onChange={(on) => setPath("orient", on)} /></>}
+      </div>
+      <button class={"btn sm" + (sketchArm.value ? " on" : "")} aria-pressed={sketchArm.value} onClick={() => { sketchArm.value = !sketchArm.value; if (sketchArm.value && tool.value !== "move") tool.value = "move"; }}>
+        <Icon n="path" />{sketchArm.value ? t("path_sketch_cancel") : t("path_sketch")}
+      </button>
+      <p class="hint-s">{sketchArm.value ? t("tip_sketch") : n >= 2 ? t("path_hint") : t("path_none")}</p>
     </div>
   );
 }

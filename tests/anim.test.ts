@@ -102,3 +102,15 @@ test("camera: zoom keeps the looked-at point in the middle; parts that follow it
   const off = solve(p, 0, null, false);
   assert.deepEqual(apply(off.world.get("a")!, 0, 0).map(Math.round), [300, 200]);
 });
+
+test("motion path: a curve goes through every key, and orient faces the way it moves", async () => {
+  const { posAt, headingAt } = await import("../src/model/anim.ts");
+  const l = { id: "a", name: "a", asset: null, parent: null, px: 0, py: 0, base: { x: 0, y: 0, rot: 0, sx: 1, sy: 1, o: 1 }, visible: true, locked: false,
+    tracks: { x: [{ f: 0, v: 0, e: "linear" as const }, { f: 10, v: 100, e: "linear" as const }, { f: 20, v: 200, e: "linear" as const }], y: [{ f: 0, v: 0, e: "linear" as const }, { f: 10, v: 100, e: "linear" as const }, { f: 20, v: 0, e: "linear" as const }] },
+    path: { curve: true, orient: true } };
+  assert.deepEqual(posAt(l, 10).map(Math.round), [100, 100]);
+  // between keys the curve bulges past the straight line (which would give y = 50 at frame 5)
+  assert.ok(posAt(l, 5)[1] > 50);
+  near(headingAt(l, 10), 0, 1);
+  assert.ok(headingAt(l, 2) > 0 && headingAt(l, 18) < 0);
+});
