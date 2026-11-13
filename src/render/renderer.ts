@@ -262,8 +262,22 @@ export function createRenderer(canvas: Canvas, opts: RendererOptions = {}): Rend
           gl.uniform1i(uMaskOn, 0);
           continue;
         }
+        // work only on the part's own patch of the screen (plus room for its blur, shadow and glow)
+        const reachOf = (r: number) => (r > 0.05 ? r * Math.sqrt(Math.max(1, Math.ceil(r / 24))) : 0);
+        const sh = fx!.shadow > 0 ? l.fx?.shadow : undefined, gw0 = fx!.glow > 0 ? l.fx?.glow : undefined;
+        const reach = Math.max(reachOf(fx!.blur * vs), sh ? reachOf(Math.max(0, sh.blur) * vs) : 0, gw0 ? reachOf(Math.max(1, gw0.size) * vs) : 0) + 2;
+        const offX = sh ? Math.abs(view[0] * sh.dx + view[2] * sh.dy) : 0, offY = sh ? Math.abs(view[1] * sh.dx + view[3] * sh.dy) : 0;
+        const box = partBox(F, l);
+        if (!box) continue;
+        const R = clampBox([box[0] - reach * 2 - offX, box[1] - reach * 2 - offY, box[2] + reach * 2 + offX, box[3] + reach * 2 + offY]);
+        if (!R) continue;
+        // clear a wider ring, so the blur never reads what an earlier part left there
+        const Rc = clampBox([R[0] - reach - offX, R[1] - reach - offY, R[2] + reach + offX, R[3] + reach + offY])!;
+        gl.enable(gl.SCISSOR_TEST); scissor(Rc);
+        for (const tg of [T.A, T.B, T.C]) { gl.bindFramebuffer(gl.FRAMEBUFFER, tg.fb); gl.clear(gl.COLOR_BUFFER_BIT); }
+        scissor(R);
         // 1. the part alone, off screen
-        gl.bindFramebuffer(gl.FRAMEBUFFER, T.A.fb); gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, T.A.fb);
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); setAdjust(fx, l); gl.uniform1i(uMaskOn, 0);
         mesh(F, l, 0, op);
         // 2. its own blur
@@ -282,10 +296,33 @@ export function createRenderer(canvas: Canvas, opts: RendererOptions = {}): Rend
         }
         // 4. the part itself
         screen(T.A, 0, 1, [0, 0, 0], [0, 0], maskOn, fx!.blend);
+        gl.disable(gl.SCISSOR_TEST);
         gl.useProgram(prog); gl.bindVertexArray(vaoMesh);
       }
       gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
+      /** Screen rectangle [x0, y0, x1, y1] (canvas pixels, y down) a part can cover, or null. */
+      function partBox(Fp: Parts, l: Layer): [number, number, number, number] | null {
+        const id = Fp.pic?.has(l.id) ? Fp.pic.get(l.id)! : l.asset; if (!id) return null;
+        const a = p.assets.find((x) => x.id === baseId(id)), own = p.assets.find((x) => x.id === l.asset), m = Fp.world.get(l.id);
+        if (!a || !m) return null;
+        const bw = Math.max(a.w, own?.w ?? 0), bh = Math.max(a.h, own?.h ?? 0), M = mulView(view, m);
+        // bending and pins can move the picture past its own frame: allow some room
+        const pad = (l.bend && l.bend > 0) || Fp.deform?.has(l.id) || bw !== a.w || bh !== a.h ? 0.35 : 0;
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (const [u, v] of [[-pad, -pad], [1 + pad, -pad], [1 + pad, 1 + pad], [-pad, 1 + pad]]) {
+          const x = u * bw - (bw - a.w) / 2, y = v * bh - (bh - a.h) / 2;
+          const X = M[0] * x + M[2] * y + M[4], Y = M[1] * x + M[3] * y + M[5];
+          x0 = Math.min(x0, X); y0 = Math.min(y0, Y); x1 = Math.max(x1, X); y1 = Math.max(y1, Y);
+        }
+        return [x0, y0, x1, y1];
+      }
+      function clampBox(b: [number, number, number, number]): [number, number, number, number] | null {
+        const x0 = Math.max(0, Math.floor(b[0])), y0 = Math.max(0, Math.floor(b[1])), x1 = Math.min(w, Math.ceil(b[2])), y1 = Math.min(h, Math.ceil(b[3]));
+        return x1 > x0 && y1 > y0 ? [x0, y0, x1, y1] : null;
+      }
+      /** Scissor from a y-down rectangle (WebGL counts rows from the bottom). */
+      function scissor(b: [number, number, number, number]) { gl!.scissor(b[0], h - b[3], b[2] - b[0], b[3] - b[1]); }
       function setAdjust(fx: FxNow | null, l: Layer) {
         if (!fx) { gl!.uniform4f(uAdj, 0, 0, 0, 0); gl!.uniform4f(uTint, 0, 0, 0, 0); return; }
         gl!.uniform4f(uAdj, fx.bright, fx.contrast, fx.sat, (fx.hue * Math.PI) / 180);
