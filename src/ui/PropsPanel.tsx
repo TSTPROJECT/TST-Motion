@@ -7,6 +7,9 @@ import { pinChan, type Chan, type Ease, type Layer, type Prop } from "../model/t
 import { t, type Key as TKey } from "../i18n";
 import { Icon } from "./icons";
 import { toast } from "./shell";
+import { getLoaded, importFiles, ACCEPT } from "../io/assets";
+import { pickFile } from "./open";
+import { SWAY_DEFAULT } from "../model/physics";
 
 function KeyDot({ l, pr }: { l: Layer; pr: Chan }) {
   const keys = l.tracks[pr];
@@ -153,6 +156,53 @@ export function PropsPanel() {
             <p class="hint-s">{t("bend_hint")}</p>
           </div>
         )}
+        {asset && (
+          <div class="grp">
+            <h3>{t("g_swap")}{mode.value === "animate" && <KeyDot l={l} pr="swap" />}</h3>
+            <div class="swaps">
+              {[l.asset, ...(l.swaps ?? []), null].map((id, k) => {
+                const idx = id === null ? -1 : k, now = Math.round(valueAt(l, "swap", f)) === idx || (idx === 0 && Math.round(valueAt(l, "swap", f)) > (l.swaps?.length ?? 0));
+                const url = id ? getLoaded(id)?.url : undefined;
+                return (
+                  <div class={"sw" + (now ? " on" : "")}>
+                    <button title={id === null ? t("swap_hide") : k === 0 ? t("swap_own") : t("swap_n", { n: k })} aria-pressed={now} onClick={() => setOn((q) => writeProp(q, "swap", idx), true)}>
+                      {id === null ? <Icon n="eyeoff" /> : url ? <img src={url} alt="" /> : <span class="num">{k}</span>}
+                    </button>
+                    {adv && k > 0 && id !== null && <button class="x" title={t("swap_remove")} aria-label={t("swap_remove")} onClick={() => setOn((q) => {
+                      q.swaps = (q.swaps ?? []).filter((_, i) => i !== k - 1);
+                      const fix = (v: number) => (v === k ? 0 : v > k ? v - 1 : v);
+                      if (q.base.swap !== undefined) q.base.swap = fix(q.base.swap);
+                      q.tracks.swap?.forEach((key) => (key.v = fix(key.v)));
+                      if (!q.swaps.length) delete q.swaps;
+                    }, true)}>×</button>}
+                  </div>
+                );
+              })}
+              <button class="sw add" title={t("swap_add")} aria-label={t("swap_add")} onClick={async () => {
+                const files = await pickFile(ACCEPT, true); const pp = project.value; if (!files.length || !pp) return;
+                const r = await importFiles(files, pp);
+                if (!r.assets.length) { toast(t("import_failed", { names: r.failed.join(", ") }), true); return; }
+                edit((q) => { q.assets.push(...r.assets); const x = q.layers.find((z) => z.id === l.id); if (x) x.swaps = [...(x.swaps ?? []), ...r.assets.map((a) => a.id)]; });
+              }}><Icon n="plus" /></button>
+            </div>
+            <p class="hint-s">{t("swap_hint")}</p>
+          </div>
+        )}
+        <div class="grp">
+          <h3><span><Icon n="wind" size={13} /> {t("g_sway")}</span><Toggle on={!!l.sway} label={t("g_sway")} onChange={(on) => setOn((q) => {
+            if (!on) { delete q.sway; return; }
+            q.sway = { ...SWAY_DEFAULT };
+            // a soft joint makes the swing curve like real hair or cloth
+            if (q.parent && !q.bend && asset) q.bend = Math.round(Math.max(8, Math.max(asset.w, asset.h) * 0.45));
+          }, true)} /></h3>
+          {l.sway ? <>
+            <Range label={t("sway_amt")} value={l.sway.amt} min={0} max={2} onLive={(x) => setOn((q) => { if (q.sway) q.sway.amt = x; })} onCommit={(x) => setOn((q) => { if (q.sway) q.sway.amt = x; }, true)} />
+            {adv && <Range label={t("sway_stiff")} value={l.sway.stiff} min={0} max={1} onLive={(x) => setOn((q) => { if (q.sway) q.sway.stiff = x; })} onCommit={(x) => setOn((q) => { if (q.sway) q.sway.stiff = x; }, true)} />}
+            {adv && <Range label={t("sway_damp")} value={l.sway.damp} min={0} max={1} onLive={(x) => setOn((q) => { if (q.sway) q.sway.damp = x; })} onCommit={(x) => setOn((q) => { if (q.sway) q.sway.damp = x; }, true)} />}
+            <Range label={t("sway_wind")} value={l.sway.wind} min={0} max={1} onLive={(x) => setOn((q) => { if (q.sway) q.sway.wind = x; })} onCommit={(x) => setOn((q) => { if (q.sway) q.sway.wind = x; }, true)} />
+            <p class="hint-s">{l.parent ? t("sway_hint") : t("sway_need_parent")}</p>
+          </> : <p class="hint-s">{t("sway_off")}</p>}
+        </div>
         {(l.pins?.length || tool.value === "pin") && (
           <div class="grp">
             <h3>{t("g_pins")}{l.pins?.length ? <button onClick={() => setOn((q) => { for (const pn of q.pins ?? []) for (const ax of ["x", "y"] as const) { delete q.tracks[pinChan(pn.id, ax)]; delete q.base[pinChan(pn.id, ax)]; } delete q.pins; }, true)}>{t("pins_clear")}</button> : null}</h3>
@@ -176,4 +226,18 @@ export function PropsPanel() {
 /** A small on/off switch. */
 export function Toggle({ on, label, onChange }: { on: boolean; label: string; onChange: (on: boolean) => void }) {
   return <button class={"tgl" + (on ? " on" : "")} role="switch" aria-checked={on} aria-label={label} title={label} onClick={() => onChange(!on)}><i /></button>;
+}
+
+/** A slider for 0..max settings, shown as a percentage. */
+export function Range({ label, value, min, max, onLive, onCommit }: { label: string; value: number; min: number; max: number; onLive: (v: number) => void; onCommit: (v: number) => void }) {
+  const started = useRef(false);
+  return (
+    <label class="rng">
+      <span>{label}</span>
+      <input type="range" min={min} max={max} step={(max - min) / 100} value={value}
+        onInput={(e) => { if (!started.current) { started.current = true; begin(); } onLive(+(e.target as HTMLInputElement).value); }}
+        onChange={(e) => { if (started.current) { started.current = false; onLive(+(e.target as HTMLInputElement).value); finish(); } else onCommit(+(e.target as HTMLInputElement).value); }} />
+      <span class="num">{Math.round(value * 100)}%</span>
+    </label>
+  );
 }

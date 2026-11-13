@@ -127,6 +127,21 @@ const th = {
   cut_smooth_tip: "ลบรอยหยักและจุดเล็กๆ ที่ขอบส่วนที่เลือก",
   cut_preview: "ดูเฉพาะที่เลือก",
   cut_preview_tip: "ซ่อนส่วนที่ไม่ได้เลือก เพื่อตรวจขอบให้ละเอียดก่อนตัด",
+  g_swap: "สลับภาพ (ตา / ปาก)",
+  swap_own: "ภาพเดิมของชิ้นนี้",
+  swap_n: "ภาพที่ {n}",
+  swap_hide: "ซ่อน (ไม่แสดงภาพ)",
+  swap_add: "เพิ่มภาพสลับ เช่น ตาหลับ ปากอ้า",
+  swap_remove: "เอาภาพนี้ออก",
+  swap_hint: "กด + เพื่อเพิ่มภาพที่วาดไว้ (เช่น ตาหลับ ปากอ้า) แล้วเลือกภาพที่เฟรมไหนก็ได้ ในโหมดขยับจะใส่คีย์ให้เอง ภาพเปลี่ยนทันทีไม่ค่อยๆ จาง ภาพที่ขนาดต่างกันจะวางตรงกลางชิ้นเดิม",
+  g_sway: "ผม / ผ้าพลิ้วเอง",
+  sway_amt: "ความแรง",
+  sway_stiff: "ความเด้ง",
+  sway_damp: "หยุดเร็ว",
+  sway_wind: "ลมพัด",
+  sway_hint: "ชิ้นนี้จะแกว่งตามแรงเหวี่ยงเองเมื่อชิ้นที่มันติดอยู่ขยับ ไม่ต้องใส่คีย์ ใช้กับผม หาง ชายเสื้อ ริบบิ้น ตั้งจุดหมุนไว้ที่โคน",
+  sway_need_parent: "ให้ชิ้นนี้ \"ติดกับ\" ชิ้นอื่น (เช่น ผมติดกับหัว) แล้วจะพลิ้วตามเมื่อชิ้นนั้นขยับ ตอนนี้จะพลิ้วตามการขยับของตัวเองและลมเท่านั้น",
+  sway_off: "เปิดเพื่อให้ผมหรือผ้าแกว่งเองตามแรงเหวี่ยง",
 };
 export type Key = keyof typeof th;
 const en: Record<Key, string> = {
@@ -246,6 +261,21 @@ const en: Record<Key, string> = {
   cut_smooth_tip: "Round off jagged bits along the selection edge",
   cut_preview: "Show only chosen",
   cut_preview_tip: "Hide what is not chosen, to check the edge before cutting",
+  g_swap: "Picture swap (eyes / mouth)",
+  swap_own: "This part's own picture",
+  swap_n: "Picture {n}",
+  swap_hide: "Hidden (no picture)",
+  swap_add: "Add a picture to swap to, e.g. eyes closed, mouth open",
+  swap_remove: "Remove this picture",
+  swap_hint: "Press + to add pictures you drew (eyes closed, mouth open), then pick one at any frame; in Animate mode a key is added for you. Pictures switch at once. A picture of another size sits centred on the part",
+  g_sway: "Hair / cloth sway",
+  sway_amt: "Strength",
+  sway_stiff: "Springiness",
+  sway_damp: "Settles",
+  sway_wind: "Wind",
+  sway_hint: "This part swings by itself when the part it follows moves; no keys needed. Use it for hair, tails, hems and ribbons. Put the pivot at the root",
+  sway_need_parent: "Make this part follow another (e.g. hair follows the head) to swing when it moves. For now it only swings with its own motion and the wind",
+  sway_off: "Turn on to let hair or cloth swing by itself",
 };
 const dict = { th, en };
 export function t(k: Key, vars?: Record<string, string | number>) {

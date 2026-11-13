@@ -2,7 +2,7 @@
 // When the point it hangs from speeds up, slows down or turns, the part lags behind and swings back.
 // The whole clip is simulated from frame 0, so every frame (and the export) always looks the same.
 import type { Layer, Project, Sway } from "./types";
-import { solve, apply, type Solved, type SwayTable } from "./anim";
+import { solve, apply, type Solved, type SwayTable } from "./anim.ts";
 
 export const SWAY_DEFAULT: Sway = { amt: 1, stiff: 0.45, damp: 0.35, wind: 0 };
 const MAX = 70; // degrees
