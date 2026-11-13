@@ -1,6 +1,6 @@
 // List of parts, front to back.
 import { useState } from "preact/hooks";
-import { project, rev, selected, deleteLayer, duplicateLayer, moveLayer, renameLayer, toggleFlag } from "../model/store";
+import { project, rev, selected, addCamera, deleteLayer, duplicateLayer, moveLayer, renameLayer, toggleFlag } from "../model/store";
 import { getLoaded, assetsVersion } from "../io/assets";
 import { t } from "../i18n";
 import { Icon } from "./icons";
@@ -23,6 +23,7 @@ export function LayersPanel() {
         <h2>{t("layers")} <span class="muted num" style={{ fontWeight: 400, fontSize: "12px" }}>{p.layers.length}</span></h2>
         <div class="acts">
           <button class="ibtn ghost" title={`${t("add_text")} (T)`} aria-label={t("add_text")} onClick={() => void addTextLayer()}><Icon n="text" /></button>
+          <button class="ibtn ghost" title={t("add_camera")} aria-label={t("add_camera")} onClick={() => addCamera(t("camera"))}><Icon n="camera" /></button>
           <button class="ibtn ghost" title={t("bring_front")} aria-label={t("bring_front")} disabled={idx < 0 || idx === p.layers.length - 1} onClick={() => sel && moveLayer(sel, 1)}><Icon n="up" /></button>
           <button class="ibtn ghost" title={t("send_back")} aria-label={t("send_back")} disabled={idx <= 0} onClick={() => sel && moveLayer(sel, -1)}><Icon n="down" /></button>
           <button class="ibtn ghost" title={`${t("cut_open")} (C)`} aria-label={t("cut_open")} disabled={!selAsset} onClick={() => sel && (cutLayer.value = sel)}><Icon n="scissors" /></button>
@@ -37,7 +38,7 @@ export function LayersPanel() {
               const url = l.asset ? getLoaded(l.asset)?.url : undefined;
               return (
                 <div key={l.id} role="option" aria-selected={l.id === sel} class={"lyr" + (l.id === sel ? " sel" : "") + (l.visible ? "" : " off")} onClick={() => (selected.value = l.id)} onDblClick={() => setEditing(l.id)}>
-                  <span class="th">{url && <img src={url} alt="" draggable={false} />}</span>
+                  <span class="th">{url ? <img src={url} alt="" draggable={false} /> : l.camera ? <Icon n="camera" size={18} /> : null}</span>
                   <span class="tx">
                     {editing === l.id ? (
                       <span class="nm"><input autoFocus defaultValue={l.name} aria-label={t("rename")}

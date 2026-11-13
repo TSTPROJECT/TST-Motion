@@ -1,7 +1,7 @@
 // The canvas: draws the frame, lets you pick and drag parts, pan and zoom.
 import { useEffect, useRef, useState } from "preact/hooks";
 import { effect } from "@preact/signals";
-import { project, rev, frame, selected, tool, mode, onion, begin, live, finish, edit, writeProp, movePivotLive, uid, type Tool } from "../model/store";
+import { project, rev, frame, selected, tool, mode, onion, camView, begin, live, finish, edit, writeProp, movePivotLive, uid, type Tool } from "../model/store";
 import { apply, invert, mul, valueAt, type Mat, type Solved } from "../model/anim";
 import { solveShown } from "../model/physics";
 import { unpinPoint, facePoint, type P } from "../model/warp";
@@ -17,9 +17,9 @@ import { theme } from "./shell";
 
 type Drag =
   | { k: "pan"; sx: number; sy: number; ox: number; oy: number }
-  | { k: "move"; id: string; p0: [number, number]; x0: number; y0: number; inv: Mat }
+  | { k: "move"; id: string; p0: [number, number]; x0: number; y0: number; inv: Mat; cam?: number }
   | { k: "rotate"; id: string; c: [number, number]; last: number; acc: number; r0: number; sign: number }
-  | { k: "scale"; id: string; ref: [number, number]; d0: number; sx0: number; sy0: number }
+  | { k: "scale"; id: string; ref: [number, number]; d0: number; sx0: number; sy0: number; cam?: boolean }
   | { k: "pivot"; id: string; inv: Mat }
   /** pin: drag a pin to bend the picture */
   | { k: "pin"; id: string; pin: string; inv: Mat; rx: number; ry: number }
@@ -57,7 +57,7 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
   function draw() {
     const s = st.current, p = project.value, c = cv.current, o = ov.current; if (!p || !c || !o || !s.w) return;
     if (!s.renderer) s.renderer = createRenderer(c);
-    s.solved = solveShown(p, frame.value);
+    s.solved = solveShown(p, frame.value, camView.value);
     const dv: Mat = mul([s.dpr, 0, 0, s.dpr, 0, 0], view());
     // onion skin: frames before in red, after in green, fainter the further away
     const ghosts: Ghost[] = [];
@@ -66,7 +66,7 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
       for (const [dir, n, tint] of [[-1, on.before, [0.92, 0.25, 0.3]], [1, on.after, [0.15, 0.7, 0.35]]] as Array<[number, number, [number, number, number]]>) {
         for (let i = n; i >= 1; i--) {
           const g = frame.value + dir * i * on.step; if (g < 0 || g >= p.frames) continue;
-          const S = solveShown(p, g);
+          const S = solveShown(p, g, camView.value);
           ghosts.push({ world: S.world, alpha: S.alpha, follow: S.follow, deform: S.deform, pic: S.pic, tint, k: 0.42 * (1 - (i - 1) / (n + 1)) });
         }
       }
@@ -89,7 +89,8 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
     });
   }
   function handlesOf(p: Project, l: Layer, S: Solved) {
-    const a = p.assets.find((x) => x.id === l.asset); if (!a) return null;
+    // the camera's handles are its frame (the size of the output)
+    const a = l.camera ? { w: p.w, h: p.h } : p.assets.find((x) => x.id === l.asset); if (!a) return null;
     const m = S.world.get(l.id)!;
     const corners = [[0, 0], [a.w, 0], [a.w, a.h], [0, a.h]].map(([x, y]) => screenOf(m, x, y));
     const piv = screenOf(m, l.px, l.py);
@@ -111,6 +112,15 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
     g.fillStyle = css.getPropertyValue("--outside").trim() || "rgba(0,0,0,.5)";
     g.beginPath(); g.rect(0, 0, s.w, s.h); g.rect(fx, fy, fw, fh); g.fill("evenodd");
     g.strokeStyle = css.getPropertyValue("--line-2").trim(); g.lineWidth = 1; g.strokeRect(fx + 0.5, fy + 0.5, fw - 1, fh - 1);
+    // the camera's frame: what the video will show
+    const cam = p.layers.find((l) => l.camera && l.visible);
+    if (cam && !camView.value) {
+      const m = S.world.get(cam.id)!, pts = [[0, 0], [p.w, 0], [p.w, p.h], [0, p.h]].map(([x, y]) => screenOf(m, x, y));
+      g.save(); g.strokeStyle = "#ff5a3c"; g.lineWidth = 2; g.setLineDash([10, 6]);
+      g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.closePath(); g.stroke();
+      g.setLineDash([]); g.fillStyle = "#ff5a3c"; g.font = "600 12px Anuphan, sans-serif"; g.fillText("CAM", pts[0][0] + 6, pts[0][1] + 16);
+      g.restore();
+    }
 
     if (tool.value === "pose") {
       // the skeleton: a line from each joint to the joint of the part it follows
@@ -200,6 +210,7 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
     const S = (s.solved = solveShown(p, frame.value)), cur = tool.value as Tool; // fresh: the last paint may be behind
     if (cur === "hand" || e.button === 1 || s.space) { s.drag = { k: "pan", sx: x, sy: y, ox: s.ox, oy: s.oy }; return; }
     const sel = p.layers.find((l) => l.id === selected.value);
+    if (sel?.camera && !sel.locked) return camDown(sel, x, y);
     if (cur === "pin") return pinDown(sel, x, y, e);
     if (sel && sel.visible && !sel.locked) {
       const h = handlesOf(p, sel, S);
@@ -227,6 +238,28 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
     const pose = S.pose.get(hit.id)!, parentM = hit.parent ? S.world.get(hit.parent) : null;
     const inv = parentM ? invert([parentM[0], parentM[1], parentM[2], parentM[3], 0, 0]) : ([1, 0, 0, 1, 0, 0] as Mat);
     begin(); s.drag = { k: "move", id: hit.id, p0: toComp(x, y), x0: pose.x, y0: pose.y, inv };
+  }
+  /**
+   * The camera is selected: its corner handles zoom, the round handle turns it, and dragging anywhere
+   * inside its frame moves it. Looking through the camera, the picture follows the pointer instead.
+   */
+  function camDown(cam: Layer, x: number, y: number) {
+    const s = st.current, p = project.value!, S = s.solved!, h = handlesOf(p, cam, S)!, through = camView.value;
+    const pose = S.pose.get(cam.id)!;
+    if (near(h.rot, x, y)) { beginRotate(cam, x, y); if (s.drag?.k === "rotate") s.drag.sign = through ? -1 : 1; return; }
+    const ci = h.corners.findIndex((c) => near(c, x, y, HANDLE - 4));
+    if (ci >= 0) {
+      begin(); s.drag = { k: "scale", id: cam.id, ref: toComp(...h.center), d0: Math.max(1e-6, Math.hypot(...sub(toComp(x, y), toComp(...h.center)))), sx0: pose.sx, sy0: pose.sy, cam: !through };
+      return;
+    }
+    const [cx, cy] = toComp(x, y), inside = (() => {
+      const q = apply(invert(S.world.get(cam.id)!), cx, cy); return q[0] >= 0 && q[1] >= 0 && q[0] <= p.w && q[1] <= p.h;
+    })();
+    if (!inside) { selected.value = null; s.drag = { k: "pan", sx: x, sy: y, ox: s.ox, oy: s.oy }; return; }
+    // looking through it: drag the picture (the camera goes the other way, slower when zoomed in)
+    const r = (pose.rot * Math.PI) / 180, z = Math.max(0.01, pose.sx);
+    const inv: Mat = through ? [-Math.cos(r) / z, -Math.sin(r) / z, Math.sin(r) / z, -Math.cos(r) / z, 0, 0] : [1, 0, 0, 1, 0, 0];
+    begin(); s.drag = { k: "move", id: cam.id, p0: [cx, cy], x0: pose.x, y0: pose.y, inv, cam: 1 };
   }
   /** Pin tool: press a pin to drag it (Alt / right button removes it); press the picture to add a pin. */
   function pinDown(sel: Layer | undefined, x: number, y: number, e: PointerEvent) {
@@ -309,7 +342,8 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
           writeProp(l, "rot", round2(d.r0[0] + d.sign[0] * (d2 - d1) * deg));
         }
       } else if (d.k === "scale") {
-        const k = Math.hypot(cx - d.ref[0], cy - d.ref[1]) / d.d0;
+        let k = Math.hypot(cx - d.ref[0], cy - d.ref[1]) / d.d0;
+        if (d.cam) k = 1 / Math.max(1e-3, k); // a bigger camera frame sees more: zoom out
         writeProp(l, "sx", round3(d.sx0 * k)); writeProp(l, "sy", round3(d.sy0 * k));
       }
     });
@@ -330,7 +364,7 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
       if ((!s.fitted || s.auto) && project.value) { s.fitted = true; fit(); } else schedule(); // keep fitting until the user zooms or pans
     });
     ro.observe(w);
-    const stop = effect(() => { rev.value; frame.value; selected.value; tool.value; mode.value; theme.value; onion.value; schedule(); });
+    const stop = effect(() => { rev.value; frame.value; selected.value; tool.value; mode.value; theme.value; onion.value; camView.value; schedule(); });
     let lastPid = project.value?.id;
     const stopFit = effect(() => { const id = project.value?.id; if (id !== lastPid) { lastPid = id; s.fitted = false; if (s.w) { s.fitted = true; fit(); } } });
     onAssetsChanged(schedule);
@@ -425,6 +459,10 @@ export function Stage({ onImport, dropping }: { onImport: () => void; dropping: 
         {tools.map(([id, ic, label]) => (
           <button class="tool" aria-pressed={tool.value === id} title={label} onClick={() => (tool.value = id)}><Icon n={ic} /><span>{label}</span></button>
         ))}
+        {p?.layers.some((l) => l.camera) && <>
+          <i class="sep" />
+          <button class="tool" aria-pressed={camView.value} title={t("cam_view_tip")} onClick={() => (camView.value = !camView.value)}><Icon n="camera" /><span>{t("cam_view")}</span></button>
+        </>}
         <i class="sep" />
         {(["alpha", "green", "white"] as Background[]).map((bg) => (
           <button class={"bgsw" + (bg === "alpha" ? " alpha" : "")} style={bg === "green" ? { background: "#00b140" } : bg === "white" ? { background: "#fff" } : undefined} aria-pressed={p?.bg === bg} aria-label={t(("bg_" + bg) as "bg_alpha")} title={t(("bg_" + bg) as "bg_alpha")} onClick={() => setBg(bg)} />

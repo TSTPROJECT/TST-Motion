@@ -241,6 +241,16 @@ const th = {
   text_spacing: "ระยะตัวอักษร",
   text_typewriter: "พิมพ์ทีละตัว",
   text_hint: "ขยับ หมุน ย่อขยาย ใส่คีย์ได้เหมือนชิ้นอื่น \"พิมพ์ทีละตัว\" ใส่คีย์ให้ตัวอักษรค่อยๆ โผล่จากเฟรมนี้ (2 เฟรมต่อตัว) ฟอนต์ที่เพิ่มจากไฟล์จะติดไปกับงาน เปิดเครื่องอื่นก็เหมือนเดิม",
+  camera: "กล้อง",
+  add_camera: "เพิ่มกล้อง (ซูม แพน สั่น)",
+  g_camera: "กล้อง",
+  cam_view: "มุมกล้อง",
+  cam_view_tip: "เปิด: เห็นภาพผ่านกล้องเหมือนวิดีโอที่ได้ · ปิด: เห็นทั้งฉาก และกรอบกล้องสีส้ม",
+  cam_zoom: "ซูม",
+  cam_shake: "สั่น",
+  cam_shake_speed: "ความเร็วสั่น",
+  cam_hint: "เลือกกล้องแล้วลากบนภาพเพื่อแพน ลากมุมเพื่อซูม ลากจุดกลมเพื่อหมุน ใส่คีย์ได้ทุกค่า ชิ้นที่ \"ติดกับ\" กล้องจะอยู่กับที่บนจอ เหมาะกับตัวหนังสือหรือโลโก้ ซ่อนกล้อง (รูปตา) = ปิดกล้อง",
+  tip_cam: "ลากเพื่อแพนกล้อง ลากมุมเพื่อซูม",
 };
 export type Key = keyof typeof th;
 const en: Record<Key, string> = {
@@ -474,6 +484,16 @@ const en: Record<Key, string> = {
   text_spacing: "Letter spacing",
   text_typewriter: "Typewriter",
   text_hint: "Move, turn, scale and key it like any part. \"Typewriter\" adds keys so the letters appear one by one from this frame (2 frames each). Font files you add travel with the project",
+  camera: "Camera",
+  add_camera: "Add camera (zoom, pan, shake)",
+  g_camera: "Camera",
+  cam_view: "Camera view",
+  cam_view_tip: "On: see through the camera, like the video · Off: see the whole scene with the camera's orange frame",
+  cam_zoom: "Zoom",
+  cam_shake: "Shake",
+  cam_shake_speed: "Shake speed",
+  cam_hint: "With the camera selected, drag on the picture to pan, drag a corner to zoom, drag the round handle to turn. Every value can have keys. Parts that follow the camera stay put on screen (titles, logos). Hide the camera (eye) to switch it off",
+  tip_cam: "Drag to pan the camera, drag a corner to zoom",
 };
 const dict = { th, en };
 export function t(k: Key, vars?: Record<string, string | number>) {

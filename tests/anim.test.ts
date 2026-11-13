@@ -88,3 +88,17 @@ test("speed curve: a custom curve key eases between keys", async () => {
   assert.ok(sampleKeys(keys, 3, 0) > 70, "fast start");
   assert.equal(sampleKeys(keys, 10, 0), 100);
 });
+
+test("camera: zoom keeps the looked-at point in the middle; parts that follow it stay on screen", async () => {
+  const { solve, apply } = await import("../src/model/anim.ts");
+  const mk = (id: string, parent: string | null, x: number, y: number) => ({ id, name: id, asset: null, parent, px: 0, py: 0, base: { x, y, rot: 0, sx: 1, sy: 1, o: 1 }, tracks: {}, visible: true, locked: false });
+  const cam = { ...mk("c", null, 300, 200), px: 500, py: 400, camera: { shakeSpeed: 6 } };
+  cam.base.sx = 2; cam.base.sy = 2;
+  const p = { format: "tst-motion" as const, version: 1 as const, id: "p", name: "p", w: 1000, h: 800, fps: 30, frames: 30, bg: "alpha" as const, layers: [mk("a", null, 300, 200), mk("b", null, 350, 200), cam, mk("hud", "c", 20, 30)], assets: [], created: 0, modified: 0 };
+  const S = solve(p, 0, null, true);
+  assert.deepEqual(apply(S.world.get("a")!, 0, 0).map(Math.round), [500, 400]);
+  assert.deepEqual(apply(S.world.get("b")!, 0, 0).map(Math.round), [600, 400]);
+  assert.deepEqual(apply(S.world.get("hud")!, 0, 0).map(Math.round), [20, 30]);
+  const off = solve(p, 0, null, false);
+  assert.deepEqual(apply(off.world.get("a")!, 0, 0).map(Math.round), [300, 200]);
+});

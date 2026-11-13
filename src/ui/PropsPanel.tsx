@@ -1,7 +1,7 @@
 // Numbers for the selected part: position, rotation, size, opacity, pivot, parent, easing.
 import { useRef, useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
-import { project, rev, frame, selected, mode, tool, advanced, edit, begin, live, finish, writeProp, toggleKeys, toggleKeyProp, hasKeyAt, keyIndex, setEaseAt, easeAt, keyAt, setCurveLive, setParent, movePivotLive, renameLayer } from "../model/store";
+import { project, rev, frame, selected, mode, tool, advanced, camView, edit, begin, live, finish, writeProp, toggleKeys, toggleKeyProp, hasKeyAt, keyIndex, setEaseAt, easeAt, keyAt, setCurveLive, setParent, movePivotLive, renameLayer } from "../model/store";
 import { valueAt, keyFrames, depthOf, bezier } from "../model/anim";
 import { TURN_MAX, NOD_MAX } from "../model/warp";
 import { pinChan, type Chan, type Ease, type Layer, type Prop } from "../model/types";
@@ -122,19 +122,32 @@ export function PropsPanel() {
         )}
 
         {l.text && <TextGroup key={l.id} l={l} />}
+        {l.camera && (
+          <div class="grp">
+            <h3><span><Icon n="camera" size={13} /> {t("g_camera")}</span><Toggle on={camView.value} label={t("cam_view")} onChange={(on) => (camView.value = on)} /></h3>
+            <NumField label={t("cam_zoom")} value={v("sx") * 100} step={0.5} digits={0} suffix="%" keyDot={kd("sx")}
+              onLive={(x) => setOn((q) => { const z = Math.max(1, Math.min(2000, x)) / 100; writeProp(q, "sx", z); writeProp(q, "sy", z); })}
+              onCommit={(x) => setOn((q) => { const z = Math.max(1, Math.min(2000, x)) / 100; writeProp(q, "sx", z); writeProp(q, "sy", z); }, true)} />
+            {chField(t("cam_shake"), "shake", 0.5, 0, " px")}
+            <Range label={t("cam_shake_speed")} value={(l.camera.shakeSpeed ?? 6) / 20} min={0} max={1}
+              onLive={(x) => setOn((q) => { if (q.camera) q.camera.shakeSpeed = Math.max(0.2, x * 20); })} onCommit={(x) => setOn((q) => { if (q.camera) q.camera.shakeSpeed = Math.max(0.2, x * 20); }, true)} />
+            <p class="hint-s">{t("cam_hint")}</p>
+          </div>
+        )}
 
         <div class="grp">
           <h3>{t("g_transform")}</h3>
           <NumField label={t("p_x")} value={v("x")} step={1} digits={1} keyDot={kd("x")} onLive={(x) => liveSet("x", x)} onCommit={(x) => commit("x", x)} />
           <NumField label={t("p_y")} value={v("y")} step={1} digits={1} keyDot={kd("y")} onLive={(x) => liveSet("y", x)} onCommit={(x) => commit("y", x)} />
           <NumField label={t("p_rot")} value={v("rot")} step={0.5} digits={1} suffix="°" keyDot={kd("rot")} onLive={(x) => liveSet("rot", x)} onCommit={(x) => commit("rot", x)} />
-          <div style={{ position: "relative" }}>
+          {!l.camera && <><div style={{ position: "relative" }}>
             <NumField label={t("p_sx")} value={v("sx") * 100} step={0.5} digits={1} suffix="%" keyDot={kd("sx")} onLive={(x) => scaleLive("sx", x / 100)} onCommit={(x) => scaleCommit("sx", x / 100)} />
             <div style={{ height: "8px" }} />
             <NumField label={t("p_sy")} value={v("sy") * 100} step={0.5} digits={1} suffix="%" keyDot={kd("sy")} onLive={(x) => scaleLive("sy", x / 100)} onCommit={(x) => scaleCommit("sy", x / 100)} />
             <button class={"linkbtn" + (linked ? " on" : "")} style={{ position: "absolute", left: "64px", top: "25px" }} title={t("link_scale")} aria-label={t("link_scale")} aria-pressed={linked} onClick={() => setLinked(!linked)}><Icon n="link" size={16} /></button>
           </div>
           <NumField label={t("p_o")} value={v("o") * 100} step={0.5} digits={0} suffix="%" keyDot={kd("o")} onLive={(x) => liveSet("o", Math.max(0, Math.min(100, x)) / 100)} onCommit={(x) => commit("o", Math.max(0, Math.min(100, x)) / 100)} />
+          </>}
         </div>
 
         {mode.value === "animate" && (
@@ -157,11 +170,11 @@ export function PropsPanel() {
           </div>
         )}
 
-        <div class="grp">
+        {!l.camera && <div class="grp">
           <h3>{t("g_pivot")}{asset && <button onClick={() => { begin(); movePivotLive(l.id, asset.w / 2, asset.h / 2); finish(); }}>{t("center_pivot")}</button>}</h3>
           {adv && <NumField label={t("p_px")} value={l.px} step={1} digits={1} onLive={(x) => movePivotLive(l.id, x, l.py)} onCommit={(x) => { begin(); movePivotLive(l.id, x, l.py); finish(); }} />}
           {adv && <NumField label={t("p_py")} value={l.py} step={1} digits={1} onLive={(y) => movePivotLive(l.id, l.px, y)} onCommit={(y) => { begin(); movePivotLive(l.id, l.px, y); finish(); }} />}
-        </div>
+        </div>}
         {l.parent && (
           <div class="grp">
             <h3>{t("g_bend")}{!adv && <Toggle on={(l.bend ?? 0) > 0} label={t("g_bend")} onChange={(on) => setOn((q) => { if (on) q.bend = Math.round(Math.max(8, Math.min(asset?.w ?? 60, asset?.h ?? 60) * 0.35)); else delete q.bend; }, true)} />}</h3>
@@ -238,7 +251,7 @@ export function PropsPanel() {
             <p class="hint-s">{t("depth_hint")}</p>
           </div>
         )}
-        <div class="grp">
+        {!l.camera && <div class="grp">
           <h3><span><Icon n="wind" size={13} /> {t("g_sway")}</span><Toggle on={!!l.sway} label={t("g_sway")} onChange={(on) => setOn((q) => {
             if (!on) { delete q.sway; return; }
             q.sway = { ...SWAY_DEFAULT };
@@ -252,8 +265,8 @@ export function PropsPanel() {
             <Range label={t("sway_wind")} value={l.sway.wind} min={0} max={1} onLive={(x) => setOn((q) => { if (q.sway) q.sway.wind = x; })} onCommit={(x) => setOn((q) => { if (q.sway) q.sway.wind = x; }, true)} />
             <p class="hint-s">{l.parent ? t("sway_hint") : t("sway_need_parent")}</p>
           </> : <p class="hint-s">{t("sway_off")}</p>}
-        </div>
-        {(l.pins?.length || tool.value === "pin") && (
+        </div>}
+        {!l.camera && (l.pins?.length || tool.value === "pin") && (
           <div class="grp">
             <h3>{t("g_pins")}{l.pins?.length ? <button onClick={() => setOn((q) => { for (const pn of q.pins ?? []) for (const ax of ["x", "y"] as const) { delete q.tracks[pinChan(pn.id, ax)]; delete q.base[pinChan(pn.id, ax)]; } delete q.pins; }, true)}>{t("pins_clear")}</button> : null}</h3>
             {!l.pins?.length ? <p class="hint-s">{t("pins_none")}</p> : <>

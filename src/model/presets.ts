@@ -22,7 +22,7 @@ function familySize(p: Project, id: string) {
 }
 /** The part everything hangs from (the character as a whole). */
 export function rootOf(p: Project): Layer | null {
-  const roots = p.layers.filter((l) => !l.parent && l.visible);
+  const roots = p.layers.filter((l) => !l.parent && l.visible && !l.camera);
   return roots.sort((a, b) => familySize(p, b.id) - familySize(p, a.id))[0] ?? null;
 }
 

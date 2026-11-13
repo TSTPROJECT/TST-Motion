@@ -65,5 +65,5 @@ export function swayFor(p: Project): SwayTable {
   if (key !== cacheKey) { cacheKey = key; cacheTable = simulate(p); }
   return cacheTable;
 }
-/** solve() with the sway included: what the canvas and the export show. */
-export const solveShown = (p: Project, f: number) => solve(p, f, swayFor(p));
+/** solve() with the sway included (and seen through the camera unless cam is false): what the canvas and the export show. */
+export const solveShown = (p: Project, f: number, cam = true) => solve(p, f, swayFor(p), cam);

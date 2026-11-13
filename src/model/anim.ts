@@ -137,21 +137,51 @@ export function depthOf(project: Project, l: Layer, head: Layer): number {
   return (front ? 0.18 : -0.18) * f.rx;
 }
 
-/** World matrices (layer image -> composition pixels) and combined opacity for every layer. */
-export function solve(project: Project, frame: number, sway?: SwayTable | null): Solved {
+/** Camera shake: smooth wandering offset (-1..1 each) for a time in seconds. */
+export function shakeAt(t: number, speed: number): [number, number, number] {
+  const s = Math.max(0.05, speed) * Math.PI * 2;
+  const n = (a: number, b: number, c: number) => 0.55 * Math.sin(t * s * a + b) + 0.3 * Math.sin(t * s * a * 2.13 + c) + 0.15 * Math.sin(t * s * a * 4.71 + b + c);
+  return [n(1, 0.3, 1.7), n(1.07, 2.1, 0.4), n(0.93, 4.2, 2.9)];
+}
+/** The camera layer in use, if any (a hidden camera is switched off). */
+export const cameraOf = (p: Project) => p.layers.find((l) => l.camera && l.visible) ?? null;
+/**
+ * Camera matrix: composition -> what the camera sees (the output picture). The camera's point (x, y)
+ * lands in the middle, turned by -rot and zoomed by sx.
+ */
+export function cameraMatrix(p: Project, cam: Layer, frame: number): Mat {
+  let x = valueAt(cam, "x", frame), y = valueAt(cam, "y", frame), rot = valueAt(cam, "rot", frame);
+  const z = Math.max(0.01, valueAt(cam, "sx", frame)), amt = valueAt(cam, "shake", frame);
+  if (amt) {
+    const [a, b, c] = shakeAt(frame / p.fps, cam.camera?.shakeSpeed ?? 6);
+    x += a * amt; y += b * amt; rot += c * amt * 0.04;
+  }
+  const r = (-rot * Math.PI) / 180, cos = Math.cos(r) * z, sin = Math.sin(r) * z;
+  // T(w/2, h/2) · R(-rot) · S(z) · T(-x, -y)
+  return [cos, sin, -sin, cos, p.w / 2 - (cos * x - sin * y), p.h / 2 - (sin * x + cos * y)];
+}
+
+/**
+ * World matrices (layer image -> composition pixels) and combined opacity for every layer.
+ * With `cam`, everything is seen through the camera (the output); without, the composition itself.
+ */
+export function solve(project: Project, frame: number, sway?: SwayTable | null, cam = false): Solved {
   const byId = new Map(project.layers.map((l) => [l.id, l]));
   const sizeOf = new Map(project.assets.map((a) => [a.id, a]));
   const world = new Map<string, Mat>(), alpha = new Map<string, number>(), pose = new Map<string, Pose>(), follow = new Map<string, Mat>();
   const deform = new Map<string, Float32Array>(), pic = new Map<string, string | null>();
   const visiting = new Set<string>();
   const fi = Math.max(0, Math.round(frame));
+  const camL = cameraOf(project), C = camL ? cameraMatrix(project, camL, frame) : null;
   const visit = (l: Layer): void => {
     if (world.has(l.id)) return;
     const p = poseAt(l, frame);
     pose.set(l.id, p);
     const extra = sway?.get(l.id)?.[Math.min(fi, (sway.get(l.id)?.length ?? 1) - 1)] ?? 0;
-    let m = localMatrix(extra ? { ...p, rot: p.rot + extra } : p, l.px, l.py), a = clamp01(p.o);
+    // the camera's own frame sits where it looks (its children ride along, fixed on the output)
+    let m = l === camL && C ? invert(C) : localMatrix(extra ? { ...p, rot: p.rot + extra } : p, l.px, l.py), a = clamp01(p.o);
     const parent = l.parent ? byId.get(l.parent) : undefined;
+    if (cam && C && !(parent && !visiting.has(parent.id))) m = mul(C, m);
     if (parent && !visiting.has(parent.id)) {
       visiting.add(l.id);
       visit(parent);

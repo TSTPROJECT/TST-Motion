@@ -23,7 +23,7 @@ let versionAt = 0, backupAt = 0, dirtyVersion = false, dirtyBackup = false;
 export async function thumbnail(p: Project): Promise<string | undefined> {
   try {
     const k = 240 / Math.max(p.w, p.h), w = Math.max(1, Math.round(p.w * k)), h = Math.max(1, Math.round(p.h * k));
-    const c = new OffscreenCanvas(w, h), r = create2d(c), s = solve(p, 0);
+    const c = new OffscreenCanvas(w, h), r = create2d(c), s = solve(p, 0, null, true);
     r.draw({ project: p, world: s.world, alpha: s.alpha, pic: s.pic }, [k, 0, 0, k, 0, 0], w, h);
     const blob = await c.convertToBlob({ type: "image/webp", quality: 0.7 });
     return await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result as string); fr.onerror = () => res(undefined); fr.readAsDataURL(blob); });

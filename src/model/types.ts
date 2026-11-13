@@ -5,7 +5,7 @@ export type Prop = "x" | "y" | "rot" | "sx" | "sy" | "o";
 export const PROPS: Prop[] = ["x", "y", "rot", "sx", "sy", "o"];
 /**
  * Any value that can have keyframes: a Prop, or "turn" / "nod" (3D head turn, -1..1),
- * "swap" (which picture is shown), "type" (share of a text's letters shown, 0..1),
+ * "swap" (which picture is shown), "type" (share of a text's letters shown, 0..1), "shake" (camera shake, px),
  * or "pin:<id>:x" / "pin:<id>:y" (how far a pin was dragged).
  */
 export type Chan = string;
@@ -97,6 +97,11 @@ export interface Layer {
   depth?: number;
   /** text part; the "type" value (0..1) shows that share of the letters (typewriter) */
   text?: TextStyle;
+  /**
+   * The camera (at most one, no picture): x/y = the point it looks at, rot = its turn, sx = zoom,
+   * "shake" = how far it shakes (pixels). Parts that follow the camera stay put on the screen.
+   */
+  camera?: { shakeSpeed: number };
 }
 
 export interface Asset {

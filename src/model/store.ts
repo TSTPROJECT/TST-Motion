@@ -24,6 +24,8 @@ export const canRedo = signal(false);
 const advSaved = (() => { try { return localStorage.getItem("tstm-adv") === "1"; } catch { return false; } })();
 export const advanced = signal(advSaved);
 export function setAdvanced(v: boolean) { advanced.value = v; try { localStorage.setItem("tstm-adv", v ? "1" : "0"); } catch { /* private mode */ } }
+/** Look through the camera on the canvas (what the video shows); off = the whole composition with the camera's frame. */
+export const camView = signal(true);
 /** Onion skin: show nearby frames faintly. */
 export const onion = signal({ on: false, before: 2, after: 2, step: 3 });
 
@@ -399,4 +401,16 @@ export function makeLoop() {
     const last = p.frames - 1;
     for (const l of p.layers) for (const ch of chans(l)) writeKey(l, ch, valueAt(l, ch, 0), last);
   });
+}
+
+// ---------- camera ----------
+/** Add the camera (or select it if there is one already). */
+export function addCamera(name: string) {
+  const p = project.value; if (!p) return;
+  const have = p.layers.find((l) => l.camera);
+  if (have) { selected.value = have.id; return; }
+  const l = makeLayer(name, null, p.w, p.h, p.w / 2, p.h / 2, 1);
+  l.camera = { shakeSpeed: 6 };
+  edit((pp) => { pp.layers.push(l); });
+  selected.value = l.id;
 }
