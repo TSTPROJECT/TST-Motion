@@ -16,7 +16,7 @@ const savePrefs = (p: Prefs) => { try { localStorage.setItem(KEY, JSON.stringify
 
 const SWATCHES = ["#00b140", "#0047bb", "#ffffff", "#000000"];
 const GIF_SIZES = [360, 540, 720, 1080];
-const LABEL: Record<Format, string> = { mp4: "MP4", webm: "WebM", mov: "MOV", gif: "GIF" };
+const LABEL: Record<Format, string> = { mp4: "MP4", webm: "WebM", mov: "MOV", gif: "GIF", png: "PNG" };
 let lastDir: FileSystemDirectoryHandle | null = null; // remembered while the program is open
 
 function timeText(sec: number) {
@@ -70,7 +70,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
     return (
       <Modal title={t("x_done")} onClose={onClose} footer={<button class="btn primary" onClick={onClose}>{t("close")}</button>}>
         <p class="muted" style={{ margin: "0 0 10px" }}>{t("x_saved_in")}</p>
-        <ul class="xfiles">{done.map((f) => <li><b>{f.name}</b><span class="num muted">{sizeText(f.size)}</span></li>)}</ul>
+        <ul class="xfiles">{done.map((f) => <li>{f.count != null ? <><Icon n="folder" size={13} /><b>{f.name}</b><span class="num muted">{t("x_png_files", { n: f.count })} · {sizeText(f.size)}</span></> : <><b>{f.name}</b><span class="num muted">{sizeText(f.size)}</span></>}</li>)}</ul>
       </Modal>
     );
   }
@@ -133,7 +133,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
         </div>
       )}
 
-      {!!p.sounds?.some((x) => !x.mute) && <p class="hint-s" style={{ margin: "4px 0 0" }}><Icon n="music" size={12} /> {prefs.formats.some((f) => f === "mov" || f === "gif") ? t("x_sound_wav") : t("x_sound")}</p>}
+      {!!p.sounds?.some((x) => !x.mute) && <p class="hint-s" style={{ margin: "4px 0 0" }}><Icon n="music" size={12} /> {prefs.formats.some((f) => f === "mov" || f === "gif" || f === "png") ? t("x_sound_wav") : t("x_sound")}</p>}
       <p class="muted num" style={{ margin: "4px 0 0", fontSize: "12.5px" }}>{t("x_info", { fps: p.fps, sec: +(p.frames / p.fps).toFixed(2), frames: p.frames })}</p>
     </Modal>
   );

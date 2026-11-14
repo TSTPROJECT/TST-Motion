@@ -11,8 +11,8 @@ import { getAssetBlob } from "../io/assets";
 import { MovPngWriter, type Sink } from "./mov";
 import { GifWriter } from "./gif";
 
-export type Format = "mp4" | "webm" | "mov" | "gif";
-export const FORMATS: Format[] = ["mp4", "webm", "mov", "gif"];
+export type Format = "mp4" | "webm" | "mov" | "gif" | "png";
+export const FORMATS: Format[] = ["mp4", "webm", "mov", "gif", "png"];
 export const MAX_LONG = 3840, MAX_SHORT = 2160;
 
 export interface ExportOptions {
@@ -23,7 +23,8 @@ export interface ExportOptions {
   gifTransparent: boolean;        // see-through GIF, or the MP4 colour behind it
 }
 export interface Progress { frame: number; total: number }
-export interface OutFile { format: Format | "wav"; name: string; size: number }
+/** A file made by the export (for a PNG sequence: the folder, and how many pictures are in it). */
+export interface OutFile { format: Format | "wav"; name: string; size: number; count?: number }
 
 /** Sizes offered for a project: from small to 4K, keeping the frame's shape. */
 export function exportSizes(p: Project) {
@@ -44,7 +45,7 @@ export async function supportedFormats(w: number, h: number): Promise<Record<For
     canEncodeVideo("avc", { width: w, height: h }).catch(() => false),
     canEncodeVideo("vp9", { width: w, height: h }).catch(() => false),
   ]);
-  return { mp4: avc, webm: vp9, mov: true, gif: true };
+  return { mp4: avc, webm: vp9, mov: true, gif: true, png: true };
 }
 
 // ---------- files ----------
@@ -59,8 +60,16 @@ async function freeName(dir: FileSystemDirectoryHandle, base: string, ext: strin
   return `${base} ${Date.now()}.${ext}`;
 }
 
+async function freeDirName(dir: FileSystemDirectoryHandle, base: string) {
+  for (let i = 1; i < 1000; i++) {
+    const name = i === 1 ? base : `${base} (${i})`;
+    try { await dir.getDirectoryHandle(name); } catch { try { await dir.getFileHandle(name); } catch { return name; } }
+  }
+  return `${base} ${Date.now()}`;
+}
+
 interface Job {
-  format: Format; name: string; stream: FileSystemWritableFileStream;
+  format: Format; name: string; stream?: FileSystemWritableFileStream; folder?: boolean; count?: () => number;
   frame(f: number, see: OffscreenCanvas, solid: OffscreenCanvas): Promise<void>;
   finish(): Promise<void>;
   cancel(): Promise<void>;
@@ -142,6 +151,23 @@ function gifJob(name: string, stream: FileSystemWritableFileStream, o: ExportOpt
   };
 }
 
+/** PNG sequence: one see-through picture per frame in a new folder (name_0001.png, name_0002.png, ...). */
+function pngJob(name: string, folder: FileSystemDirectoryHandle, base: string, total: number): Job {
+  const digits = Math.max(4, String(total).length);
+  let size = 0, n = 0;
+  return {
+    format: "png", name, folder: true, written: () => size, count: () => n,
+    async frame(f, see) {
+      const blob = await see.convertToBlob({ type: "image/png" });
+      const ws = await (await folder.getFileHandle(`${base}_${String(f + 1).padStart(digits, "0")}.png`, { create: true })).createWritable();
+      await ws.write(blob); await ws.close();
+      size += blob.size; n++;
+    },
+    async finish() {},
+    async cancel() {},
+  };
+}
+
 /** Full-size images for export (the editor itself may use smaller copies to save memory). */
 async function fullImages(p: Project) {
   const map = new Map<string, ImageBitmap>();
@@ -156,7 +182,7 @@ export async function runExport(project: Project, dir: FileSystemDirectoryHandle
   onProgress: (p: Progress) => void, signal: AbortSignal): Promise<OutFile[]> {
   const p = structuredClone(project);
   const total = p.frames, fps = p.fps, W = o.width, H = o.height;
-  const needSee = o.formats.some((f) => f === "webm" || f === "mov" || (f === "gif" && o.gifTransparent));
+  const needSee = o.formats.some((f) => f === "webm" || f === "mov" || f === "png" || (f === "gif" && o.gifTransparent));
   const needSolid = o.formats.some((f) => f === "mp4" || (f === "gif" && !o.gifTransparent));
 
   const images = await fullImages(p);
@@ -168,20 +194,25 @@ export async function runExport(project: Project, dir: FileSystemDirectoryHandle
   const jobs: Job[] = [];
   let wavName: string | null = null;
   const cleanup = async () => {
-    for (const j of jobs) { await j.cancel(); await j.stream.abort().catch(() => {}); await dir.removeEntry(j.name).catch(() => {}); }
+    for (const j of jobs) { await j.cancel(); await j.stream?.abort().catch(() => {}); await dir.removeEntry(j.name, { recursive: !!j.folder }).catch(() => {}); }
     if (wavName) await dir.removeEntry(wavName).catch(() => {});
   };
   try {
     const audio = await mixdown(p);
     const [aac, opus] = audio ? await Promise.all([canEncodeAudio("aac").catch(() => false), canEncodeAudio("opus").catch(() => false)]) : [false, false];
     const extra: OutFile[] = [];
-    // MOV and GIF cannot carry sound: put it next to them as a WAV file
-    if (audio && o.formats.some((f) => f === "mov" || f === "gif")) {
+    // MOV, GIF and pictures cannot carry sound: put it next to them as a WAV file
+    if (audio && o.formats.some((f) => f === "mov" || f === "gif" || f === "png")) {
       wavName = await freeName(dir, baseName, "wav");
       const wav = wavOf(audio), ws = await (await dir.getFileHandle(wavName, { create: true })).createWritable();
       await ws.write(wav); await ws.close(); extra.push({ format: "wav", name: wavName, size: wav.size });
     }
     for (const format of o.formats) {
+      if (format === "png") {
+        const name = await freeDirName(dir, `${baseName} PNG`);
+        jobs.push(pngJob(name, await dir.getDirectoryHandle(name, { create: true }), baseName, total));
+        continue;
+      }
       const name = await freeName(dir, baseName, format);
       const stream = await (await dir.getFileHandle(name, { create: true })).createWritable();
       jobs.push(format === "mp4" || format === "webm" ? videoJob(format, name, stream, fps, audio, format === "mp4" ? aac : opus)
@@ -196,7 +227,7 @@ export async function runExport(project: Project, dir: FileSystemDirectoryHandle
       onProgress({ frame: f + 1, total });
     }
     for (const j of jobs) await j.finish();
-    return [...jobs.map((j) => ({ format: j.format, name: j.name, size: j.written() }) as OutFile), ...extra];
+    return [...jobs.map((j) => ({ format: j.format, name: j.name, size: j.written(), count: j.count?.() }) as OutFile), ...extra];
   } catch (e) {
     await cleanup();
     throw e;

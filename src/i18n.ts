@@ -331,6 +331,8 @@ const th = {
   keys_paste_none: "วางไม่ได้ · ชิ้นส่วนเดิมถูกลบไปแล้ว หรือเลยท้ายแอนิเมชัน",
   keys_deleted: "ลบ {n} คีย์แล้ว (กด Ctrl+Z เพื่อเอาคืน)",
   copy: "คัดลอก",
+  x_png_d: "ภาพ PNG พื้นใส 1 ไฟล์ต่อ 1 เฟรม ใส่ในโฟลเดอร์ใหม่ ใช้ต่อในโปรแกรมตัดต่อหรือเกมได้",
+  x_png_files: "{n} ภาพ",
 };
 export type Key = keyof typeof th;
 const en: Record<Key, string> = {
@@ -654,6 +656,8 @@ const en: Record<Key, string> = {
   keys_paste_none: "Nothing pasted · the part is gone, or it is past the end",
   keys_deleted: "Deleted {n} keys (Ctrl+Z brings them back)",
   copy: "Copy",
+  x_png_d: "One see-through PNG per frame, in a new folder. For editors and games.",
+  x_png_files: "{n} pictures",
 };
 const dict = { th, en };
 export function t(k: Key, vars?: Record<string, string | number>) {
