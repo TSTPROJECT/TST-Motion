@@ -1,5 +1,6 @@
 // Start screen: new project by frame size, open a file, recent projects.
 import { useEffect, useState } from "preact/hooks";
+import { openDonate } from "./donate";
 import { listProjects, deleteProject, type ProjectMeta } from "../io/db";
 import { lang, setLang, t } from "../i18n";
 import { Icon } from "./icons";
@@ -93,6 +94,8 @@ export function Home() {
         <section class="note">
           <p>{t("storage_note")}</p>
           <p>{t("phase_note")} · MIT</p>
+          <button class="btn sm coffee" onClick={() => void openDonate()}><Icon n="coffee" />{t("donate")}</button>
+          <p class="hint-s">{t("donate_note")}</p>
         </section>
       </div>
       {backups && <BackupsDialog onClose={() => setBackups(false)} />}

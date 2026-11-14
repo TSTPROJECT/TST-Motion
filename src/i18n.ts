@@ -316,6 +316,21 @@ const th = {
   lip_hint: "เลือกภาพปาก 3 แบบ แล้วกดสร้าง — ปากจะเปิดตามความดังของเสียงทีละเฟรม (ทำซ้ำได้ จะแทนที่คีย์เดิมในช่วงเสียงนั้น)",
   x_sound: "เสียงจะติดไปกับวิดีโอด้วย",
   x_sound_wav: "MOV และ GIF ใส่เสียงไม่ได้ จะได้ไฟล์เสียง .wav แยกมาให้ด้วย (MP4 / WebM มีเสียงในตัว)",
+  donate: "เลี้ยงกาแฟผู้พัฒนา",
+  donate_note: "TST Motion ใช้ฟรีตลอด ไม่มีลายน้ำ ถ้าชอบ เลี้ยงกาแฟได้ที่ Buy Me a Coffee (เปิดในเบราว์เซอร์ของคุณ)",
+  kf_tip: "คีย์เฟรม · ลากเพื่อย้าย · Shift+คลิก เลือกหลายอัน · Shift+ลากบนไทม์ไลน์ เพื่อตีกรอบเลือก",
+  keys_bar: "คีย์ที่เลือก",
+  keys_n: "เลือก {n} คีย์",
+  keys_left_tip: "เลื่อนคีย์ที่เลือกไปซ้าย 1 เฟรม",
+  keys_right_tip: "เลื่อนคีย์ที่เลือกไปขวา 1 เฟรม",
+  keys_paste_here: "วางที่เฟรมนี้",
+  keys_hint: "ลากคีย์อันไหนก็ได้เพื่อย้ายทั้งกลุ่ม",
+  keys_clear: "ยกเลิกการเลือกคีย์",
+  keys_copied: "คัดลอก {n} คีย์แล้ว · ไปเฟรมที่ต้องการแล้วกด Ctrl+V",
+  keys_pasted: "วาง {n} คีย์แล้ว",
+  keys_paste_none: "วางไม่ได้ · ชิ้นส่วนเดิมถูกลบไปแล้ว หรือเลยท้ายแอนิเมชัน",
+  keys_deleted: "ลบ {n} คีย์แล้ว (กด Ctrl+Z เพื่อเอาคืน)",
+  copy: "คัดลอก",
 };
 export type Key = keyof typeof th;
 const en: Record<Key, string> = {
@@ -624,6 +639,21 @@ const en: Record<Key, string> = {
   lip_hint: "Pick the 3 mouth pictures and press Make: the mouth follows the loudness frame by frame. Running it again replaces the keys in that stretch.",
   x_sound: "The sound goes into the video.",
   x_sound_wav: "MOV and GIF cannot hold sound, so a separate .wav comes with them (MP4 / WebM have it inside).",
+  donate: "Buy me a coffee",
+  donate_note: "TST Motion is free forever with no watermark. If you like it, you can buy me a coffee (opens in your browser).",
+  kf_tip: "Keyframe · drag to move · Shift+click to pick more · Shift+drag on the timeline to box-select",
+  keys_bar: "Picked keys",
+  keys_n: "{n} keys picked",
+  keys_left_tip: "Move picked keys 1 frame left",
+  keys_right_tip: "Move picked keys 1 frame right",
+  keys_paste_here: "Paste here",
+  keys_hint: "Drag any picked key to move them all",
+  keys_clear: "Unpick keys",
+  keys_copied: "Copied {n} keys · go to a frame and press Ctrl+V",
+  keys_pasted: "Pasted {n} keys",
+  keys_paste_none: "Nothing pasted · the part is gone, or it is past the end",
+  keys_deleted: "Deleted {n} keys (Ctrl+Z brings them back)",
+  copy: "Copy",
 };
 const dict = { th, en };
 export function t(k: Key, vars?: Record<string, string | number>) {

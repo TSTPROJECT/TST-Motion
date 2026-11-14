@@ -146,6 +146,7 @@ fn backup_read(app: tauri::AppHandle, path: String) -> Result<Response, String> 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![startup_file_name, startup_file_bytes, backup_save, backup_list, backup_read])
         .run(tauri::generate_context!())
         .expect("error while running TST Motion");

@@ -1,7 +1,9 @@
 // Time ruler, one row per part with its keyframes, play controls.
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { JSX } from "preact";
-import { project, rev, frame, playing, loop, selected, mode, edit, moveKeys, onion, advanced } from "../model/store";
+import { project, rev, frame, playing, loop, selected, mode, edit, onion, advanced } from "../model/store";
+import { selKeys, keyId, parseKey, setSel, toggleSel, clearSel, hasClip } from "../model/keysel";
+import { copySel, pasteSel, deleteSel, nudgeSel } from "./keyOps";
 import { keyFrames } from "../model/anim";
 import { t } from "../i18n";
 import { Icon } from "./icons";
@@ -22,8 +24,10 @@ export function Timeline() {
   const scroller = useRef<HTMLDivElement>(null);
   const [ppf, setPpf] = useState(0); // pixels per frame; 0 = fit the width
   const [trackW, setTrackW] = useState(600);
-  const keyDrag = useRef<{ id: string; from: number; at: number; x0: number; moved: boolean } | null>(null);
-  const [dragShow, setDragShow] = useState<{ id: string; from: number; at: number } | null>(null);
+  const keyDrag = useRef<{ from: number; x0: number; d: number; moved: boolean } | null>(null);
+  const [drag, setDrag] = useState<{ d: number } | null>(null);
+  const [box, setBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const sel = selKeys.value;
   const f = frame.value, total = p?.frames ?? 1;
   const fitPpf = trackW / Math.max(1, total);
   const scale = ppf || fitPpf;
@@ -61,6 +65,39 @@ export function Timeline() {
     const mv = (ev: PointerEvent) => { const nf = xToFrame(ev.clientX); if (nf !== frame.value) { frame.value = nf; scrubAudio(nf); } };
     const up = () => { el.removeEventListener("pointermove", mv); el.removeEventListener("pointerup", up); el.removeEventListener("pointercancel", up); };
     el.addEventListener("pointermove", mv); el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
+  };
+
+  // the picked keys move together and stop at the start or end
+  const clampShift = (d: number) => {
+    let lo = Infinity, hi = -Infinity;
+    for (const k of sel) { const fr = parseKey(k)[1]; lo = Math.min(lo, fr); hi = Math.max(hi, fr); }
+    return lo === Infinity ? 0 : Math.max(-lo, Math.min(total - 1 - hi, d));
+  };
+  const dropKeys = () => {
+    const d = keyDrag.current; keyDrag.current = null; setDrag(null);
+    if (d?.moved && d.d) { nudgeSel(d.d); frame.value = d.from + d.d; }
+  };
+  /** Shift/Ctrl + drag on the timeline draws a box that picks the keys inside it. */
+  const boxStart = (e: PointerEvent) => {
+    if ((e.target as HTMLElement).closest(".kf, .lab, .clip")) return false;
+    if (!(e.shiftKey || e.ctrlKey || e.metaKey)) { clearSel(); return false; }
+    e.preventDefault(); playing.value = false;
+    const el = window;
+    const b = { x0: e.clientX, y0: e.clientY, x1: e.clientX, y1: e.clientY }; setBox(b);
+    const mv = (ev: PointerEvent) => { b.x1 = ev.clientX; b.y1 = ev.clientY; setBox({ ...b }); };
+    const up = () => {
+      el.removeEventListener("pointermove", mv); el.removeEventListener("pointerup", up); el.removeEventListener("pointercancel", up);
+      setBox(null);
+      const L = Math.min(b.x0, b.x1), R = Math.max(b.x0, b.x1), T = Math.min(b.y0, b.y1), B = Math.max(b.y0, b.y1);
+      const hit: string[] = [];
+      scroller.current?.querySelectorAll<HTMLElement>(".kf[data-k]").forEach((k) => {
+        const r = k.getBoundingClientRect(), cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2;
+        if (cx >= L - 4 && cx <= R + 4 && cy >= T - 4 && cy <= B + 4) hit.push(k.dataset.k!);
+      });
+      setSel([...selKeys.value, ...hit]);
+    };
+    el.addEventListener("pointermove", mv); el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
+    return true;
   };
 
   // ruler ticks: choose a step that leaves room for labels
@@ -103,36 +140,49 @@ export function Timeline() {
             onInput={(e) => { const k = +(e.target as HTMLInputElement).value / 100; setPpf(k <= 0 ? 0 : fitPpf * Math.pow(Math.max(1.0001, 40 / fitPpf), k)); }} />
         </div>
       </div>
+      {sel.size > 0 && (
+        <div class="ksel" role="toolbar" aria-label={t("keys_bar")}>
+          <span class="num"><Icon n="diamond" size={13} />{t("keys_n", { n: sel.size })}</span>
+          <button class="btn sm ghost" title={t("keys_left_tip")} aria-label={t("keys_left_tip")} onClick={() => nudgeSel(-1)}><Icon n="prev" /></button>
+          <button class="btn sm ghost" title={t("keys_right_tip")} aria-label={t("keys_right_tip")} onClick={() => nudgeSel(1)}><Icon n="next" /></button>
+          <button class="btn sm ghost" title="Ctrl+C" onClick={() => copySel()}><Icon n="copy" />{t("copy")}</button>
+          <button class="btn sm ghost" title="Ctrl+V" disabled={!hasClip.value} onClick={() => pasteSel()}><Icon n="paste" />{t("keys_paste_here")}</button>
+          <button class="btn sm ghost danger" title="Delete" onClick={() => deleteSel()}><Icon n="trash" />{t("delete")}</button>
+          <span class="hint-s">{t("keys_hint")}</span>
+          <button class="ibtn ghost" title={t("keys_clear")} aria-label={t("keys_clear")} onClick={() => clearSel()}><Icon n="close" /></button>
+        </div>
+      )}
+      {box && <div class="kbox" style={{ left: `${Math.min(box.x0, box.x1)}px`, top: `${Math.min(box.y0, box.y1)}px`, width: `${Math.abs(box.x1 - box.x0)}px`, height: `${Math.abs(box.y1 - box.y0)}px` }} />}
       <div class={"tl-scroll" + (mode.value === "setup" ? " setup-veil" : "")} ref={scroller}>
         <div class="tl-inner" style={{ width: `calc(var(--lw) + ${width + 14 + PAD}px)` }}>
-          <div class="row ruler"><div class="lab" /><div class="trk" onPointerDown={scrub as never}>{ticks}<span class="endzone" style={{ left: `${PAD + total * scale}px` }} /></div></div>
+          <div class="row ruler"><div class="lab" /><div class="trk" onPointerDown={(e) => { if (!boxStart(e as unknown as PointerEvent)) scrub(e as unknown as PointerEvent); }}>{ticks}<span class="endzone" style={{ left: `${PAD + total * scale}px` }} /></div></div>
           {(p.sounds ?? []).map((snd) => <SoundRow key={snd.id} p={p} s={snd} scale={scale} xToFrame={xToFrame} scrub={scrub} />)}
           {layers.length === 0 && <div class="tl-empty">{t("empty_title")}</div>}
           {layers.map((l) => (
             <div class={"row" + (l.id === selected.value ? " sel" : "")} key={l.id}>
               <div class="lab" title={l.name} onClick={() => (selected.value = l.id)}>{l.name}</div>
-              <div class="trk" onPointerDown={(e) => { selected.value = l.id; scrub(e as unknown as PointerEvent); }}>
+              <div class="trk" onPointerDown={(e) => { if (boxStart(e as unknown as PointerEvent)) return; selected.value = l.id; scrub(e as unknown as PointerEvent); }}>
                 {keyFrames(l).map((kf) => {
-                  const at = dragShow && dragShow.id === l.id && dragShow.from === kf ? dragShow.at : kf;
-                  const drop = () => {
-                    const d = keyDrag.current; keyDrag.current = null; setDragShow(null);
-                    if (d?.moved && d.at !== d.from) { edit((pp) => { const x = pp.layers.find((q) => q.id === d.id); if (x) moveKeys(x, d.from, d.at); }); frame.value = d.at; }
-                  };
+                  const id = keyId(l.id, kf), picked = sel.has(id);
+                  const at = drag && picked ? kf + drag.d : kf;
                   return (
-                    <button class={"kf" + (at === f ? " now" : "")} style={{ left: `${PAD + at * scale}px` }} aria-label={`${l.name} ${kf}`}
+                    <button class={"kf" + (at === f ? " now" : "") + (picked ? " picked" : "")} style={{ left: `${PAD + at * scale}px` }} data-k={id}
+                      aria-label={`${l.name} ${kf}`} aria-pressed={picked} title={t("kf_tip")}
                       onPointerDown={(e) => {
                         e.stopPropagation(); playing.value = false; selected.value = l.id; frame.value = kf;
-                        (e.target as HTMLElement).setPointerCapture(e.pointerId);
-                        keyDrag.current = { id: l.id, from: kf, at: kf, x0: e.clientX, moved: false };
+                        if (e.shiftKey || e.ctrlKey || e.metaKey) { toggleSel(id); return; }
+                        if (!picked) setSel([id]);
+                        keyDrag.current = { from: kf, x0: e.clientX, d: 0, moved: false };
+                        const mv = (ev: PointerEvent) => {
+                          const d = keyDrag.current; if (!d) return;
+                          if (!d.moved && Math.abs(ev.clientX - d.x0) < 4) return;
+                          d.moved = true;
+                          const dd = clampShift(xToFrame(ev.clientX) - d.from);
+                          if (dd !== d.d) { d.d = dd; setDrag({ d: dd }); }
+                        };
+                        const up = () => { window.removeEventListener("pointermove", mv); window.removeEventListener("pointerup", up); window.removeEventListener("pointercancel", up); dropKeys(); };
+                        window.addEventListener("pointermove", mv); window.addEventListener("pointerup", up); window.addEventListener("pointercancel", up);
                       }}
-                      onPointerMove={(e) => {
-                        const d = keyDrag.current; if (!d) return;
-                        if (!d.moved && Math.abs(e.clientX - d.x0) < 4) return;
-                        d.moved = true;
-                        const to = xToFrame(e.clientX);
-                        if (to !== d.at) { d.at = to; setDragShow({ id: d.id, from: d.from, at: to }); }
-                      }}
-                      onPointerUp={drop} onPointerCancel={drop}
                     />
                   );
                 })}

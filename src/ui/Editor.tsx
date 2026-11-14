@@ -22,6 +22,9 @@ import { toast, installPrompt, installed, install, isIos } from "./shell";
 import { openFile, pickFile } from "./open";
 import { isAudioFile, startAudio, stopAudio } from "../audio/sound";
 import { addSound } from "./soundOps";
+import { openDonate } from "./donate";
+import { selKeys, clearSel, hasClip, CLIP_MARK } from "../model/keysel";
+import { copySel, pasteSel, deleteSel } from "./keyOps";
 
 async function importNow(files: File[]) {
   const p = project.value; if (!p || files.length === 0) return;
@@ -93,11 +96,17 @@ export function Editor() {
     const paste = (e: ClipboardEvent) => {
       if ((e.target as HTMLElement)?.closest?.("input, textarea")) return;
       const files = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith("image/"));
-      if (files.length) { e.preventDefault(); void importNow(files); }
+      if (files.length) { e.preventDefault(); void importNow(files); return; }
+      if (hasClip.value && e.clipboardData?.getData("text/plain") === CLIP_MARK) { e.preventDefault(); pasteSel(); }
     };
+    const copy = (e: ClipboardEvent) => {
+      if ((e.target as HTMLElement)?.closest?.("input, textarea") || String(window.getSelection() ?? "")) return;
+      if (selKeys.value.size && copySel()) { e.preventDefault(); e.clipboardData?.setData("text/plain", CLIP_MARK); }
+    };
+    window.addEventListener("copy", copy);
     window.addEventListener("dragenter", enter); window.addEventListener("dragover", over);
     window.addEventListener("dragleave", leave); window.addEventListener("drop", drop); window.addEventListener("paste", paste);
-    return () => { window.removeEventListener("dragenter", enter); window.removeEventListener("dragover", over); window.removeEventListener("dragleave", leave); window.removeEventListener("drop", drop); window.removeEventListener("paste", paste); };
+    return () => { window.removeEventListener("dragenter", enter); window.removeEventListener("dragover", over); window.removeEventListener("dragleave", leave); window.removeEventListener("drop", drop); window.removeEventListener("paste", paste); window.removeEventListener("copy", copy); };
   }, []);
 
   // keyboard
@@ -128,7 +137,8 @@ export function Editor() {
       else if (key === "h") tool.value = "hand";
       else if (key === "c") openCut();
       else if (key === "t") void addTextLayer();
-      else if (key === "escape") selected.value = null;
+      else if (key === "escape") { if (selKeys.value.size) clearSel(); else selected.value = null; }
+      else if ((key === "delete" || key === "backspace") && selKeys.value.size) { e.preventDefault(); deleteSel(); }
       else if ((key === "delete" || key === "backspace") && selected.value) {
         const l = pp.layers.find((x) => x.id === selected.value);
         if (l && (await confirmBox(t("confirm_delete_layer", { name: l.name }), t("delete")))) deleteLayer(l.id);
@@ -184,6 +194,7 @@ export function Editor() {
                 <hr />
                 <button class="show-sm" onClick={() => setAdvanced(!advanced.value)}><Icon n="settings" />{advanced.value ? t("ui_easy") : t("ui_adv")}</button>
                 <div class="row" onClick={(e) => e.stopPropagation()}><TopToggles /></div>
+                <button onClick={() => void openDonate()}><Icon n="coffee" />{t("donate")}</button>
                 <button onClick={goHome}><Icon n="home" />{t("home")}</button>
               </div>
             </>
