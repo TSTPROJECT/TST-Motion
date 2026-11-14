@@ -28,7 +28,8 @@ export function Timeline() {
   const [drag, setDrag] = useState<{ d: number } | null>(null);
   const [box, setBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const sel = selKeys.value;
-  const f = frame.value, total = p?.frames ?? 1;
+  // the frame is read only by the small parts below (playhead, time), so playing does not redraw every row
+  const total = p?.frames ?? 1;
   const fitPpf = trackW / Math.max(1, total);
   const scale = ppf || fitPpf;
 
@@ -40,13 +41,6 @@ export function Timeline() {
     });
     ro.observe(el); return () => ro.disconnect();
   }, []);
-  // keep the playhead in view while playing
-  useEffect(() => {
-    const el = scroller.current; if (!el || !playing.value) return;
-    const lwv = parseFloat(getComputedStyle(el).getPropertyValue("--lw")) || 150;
-    const x = PAD + f * scale, left = el.scrollLeft, vis = el.clientWidth - lwv;
-    if (x < left || x > left + vis - 20) el.scrollLeft = Math.max(0, x - 40);
-  });
 
   if (!p) return null;
   const width = Math.max(trackW, total * scale);
@@ -116,11 +110,11 @@ export function Timeline() {
     <section class="card tl" aria-label={t("timeline")} data-guide="timeline">
       <div class="tl-h">
         <button class="ibtn ghost" title={t("to_start")} aria-label={t("to_start")} onClick={() => { playing.value = false; frame.value = 0; }}><Icon n="start" /></button>
-        <button class="ibtn ghost" title={t("prev_frame")} aria-label={t("prev_frame")} onClick={() => { playing.value = false; frame.value = Math.max(0, f - 1); }}><Icon n="prev" /></button>
+        <button class="ibtn ghost" title={t("prev_frame")} aria-label={t("prev_frame")} onClick={() => { playing.value = false; frame.value = Math.max(0, frame.value - 1); }}><Icon n="prev" /></button>
         <button class="play" title={playing.value ? t("pause") : t("play")} aria-label={playing.value ? t("pause") : t("play")} onClick={() => (playing.value = !playing.value)}>
           <svg viewBox="0 0 24 24">{playing.value ? <path d="M6 4h4v16H6zM14 4h4v16h-4z" /> : <path d="M7 4.5v15l13-7.5z" />}</svg>
         </button>
-        <button class="ibtn ghost" title={t("next_frame")} aria-label={t("next_frame")} onClick={() => { playing.value = false; frame.value = Math.min(total - 1, f + 1); }}><Icon n="next" /></button>
+        <button class="ibtn ghost" title={t("next_frame")} aria-label={t("next_frame")} onClick={() => { playing.value = false; frame.value = Math.min(total - 1, frame.value + 1); }}><Icon n="next" /></button>
         <button class={"ibtn ghost" + (loop.value ? " on" : "")} title={t("loop")} aria-label={t("loop")} aria-pressed={loop.value} onClick={() => (loop.value = !loop.value)}><Icon n="loop" /></button>
         <button class={"ibtn ghost" + (onion.value.on ? " on" : "")} title={t("onion_tip")} aria-label={t("onion")} aria-pressed={onion.value.on} onClick={() => (onion.value = { ...onion.value, on: !onion.value.on })}><Icon n="onion" /></button>
         {onion.value.on && advanced.value && (
@@ -130,12 +124,12 @@ export function Timeline() {
             <label>{t("onion_step")}<input class="field num" type="number" min={1} max={30} value={onion.value.step} onChange={(e) => (onion.value = { ...onion.value, step: Math.max(1, Math.min(30, +(e.target as HTMLInputElement).value || 1)) })} /></label>
           </span>
         )}
-        <span class="tc num">{fmt(f, p.fps)} <span>/ {fmt(total, p.fps)}</span></span>
+        <span class="tc num"><FrameText fmt={(f) => fmt(f, p.fps)} /> <span>/ {fmt(total, p.fps)}</span></span>
         <PoseMenu />
         <PresetMenu />
         <button class="btn sm ghost" title={t("sound_add_tip")} onClick={() => void pickSound()}><Icon n="music" />{t("sound_add")}</button>
         <div class="tl-right">
-          <span class="lbl num">{t("frame_n", { n: f })} · {p.fps} fps</span>
+          <span class="lbl num"><FrameText fmt={(f) => t("frame_n", { n: f })} /> · {p.fps} fps</span>
           <input type="range" aria-label={t("zoom_tl")} title={t("zoom_tl")} min={0} max={100} value={ppf ? Math.round(Math.log(ppf / fitPpf) / Math.log(40 / fitPpf) * 100) : 0}
             onInput={(e) => { const k = +(e.target as HTMLInputElement).value / 100; setPpf(k <= 0 ? 0 : fitPpf * Math.pow(Math.max(1.0001, 40 / fitPpf), k)); }} />
         </div>
@@ -166,7 +160,7 @@ export function Timeline() {
                   const id = keyId(l.id, kf), picked = sel.has(id);
                   const at = drag && picked ? kf + drag.d : kf;
                   return (
-                    <button class={"kf" + (at === f ? " now" : "") + (picked ? " picked" : "")} style={{ left: `${PAD + at * scale}px` }} data-k={id}
+                    <button class={"kf" + (picked ? " picked" : "")} style={{ left: `${PAD + at * scale}px` }} data-k={id} data-f={at}
                       aria-label={`${l.name} ${kf}`} aria-pressed={picked} title={t("kf_tip")}
                       onPointerDown={(e) => {
                         e.stopPropagation(); playing.value = false; selected.value = l.id; frame.value = kf;
@@ -189,11 +183,39 @@ export function Timeline() {
               </div>
             </div>
           ))}
-          <div class="playhead" style={{ left: `calc(var(--lw) + ${PAD + f * scale}px)` }} />
+          <Playhead scale={scale} scroller={scroller} vis={trackW + PAD} />
         </div>
       </div>
     </section>
   );
+}
+
+/** Text that follows the current frame (only this redraws while playing). */
+function FrameText({ fmt: show }: { fmt: (f: number) => string }) { return <>{show(frame.value)}</>; }
+
+/** The playhead line. It also marks the keys on the current frame and keeps itself in view while playing. */
+function Playhead({ scale, scroller, vis }: { scale: number; scroller: { current: HTMLDivElement | null }; vis: number }) {
+  const f = frame.value; rev.value; selKeys.value;
+  const scrollX = useRef(0), marked = useRef<Element[]>([]);
+  // remember the scroll position from scroll events: reading it each frame makes the page measure itself again
+  useEffect(() => {
+    const el = scroller.current; if (!el) return;
+    const on = () => (scrollX.current = el.scrollLeft); on();
+    el.addEventListener("scroll", on, { passive: true }); return () => el.removeEventListener("scroll", on);
+  }, []);
+  useEffect(() => {
+    const el = scroller.current; if (!el) return;
+    if (playing.value) {
+      const x = PAD + f * scale, left = scrollX.current;
+      if (x < left || x > left + vis - 20) el.scrollLeft = scrollX.current = Math.max(0, x - 40);
+    }
+    const now = [...el.querySelectorAll(`.kf[data-f="${f}"]`)];
+    for (const k of marked.current) if (!now.includes(k)) k.classList.remove("now");
+    for (const k of now) k.classList.add("now");
+    marked.current = now;
+  });
+  // moved with transform: the page does not have to be laid out again for it
+  return <div class="playhead" style={{ transform: `translateX(calc(var(--lw) + ${PAD + f * scale}px))` }} />;
 }
 
 /** A sound on the timeline: its waveform; drag it to start earlier or later. */

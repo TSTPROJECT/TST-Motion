@@ -1,7 +1,7 @@
 // Numbers for the selected part: position, rotation, size, opacity, pivot, parent, easing.
 import { useRef, useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
-import { project, rev, frame, selected, mode, tool, advanced, camView, edit, begin, live, finish, writeProp, toggleKeys, toggleKeyProp, hasKeyAt, keyIndex, setEaseAt, easeAt, keyAt, setCurveLive, setParent, movePivotLive, renameLayer } from "../model/store";
+import { project, rev, frame, panelFrame, selected, mode, tool, advanced, camView, edit, begin, live, finish, writeProp, toggleKeys, toggleKeyProp, hasKeyAt, keyIndex, setEaseAt, easeAt, keyAt, setCurveLive, setParent, movePivotLive, renameLayer } from "../model/store";
 import { valueAt, keyFrames, depthOf, bezier } from "../model/anim";
 import { TURN_MAX, NOD_MAX } from "../model/warp";
 import { pinChan, type Chan, type Ease, type Layer, type Prop } from "../model/types";
@@ -18,7 +18,7 @@ import { selectedSound } from "../audio/sound";
 
 export function KeyDot({ l, pr }: { l: Layer; pr: Chan }) {
   const keys = l.tracks[pr];
-  const state = !keys?.length ? "none" : keyIndex(keys, frame.value) >= 0 ? "on" : "";
+  const state = !keys?.length ? "none" : keyIndex(keys, panelFrame.value) >= 0 ? "on" : "";
   return <button class="kb" title={t("key_prop")} aria-label={t("key_prop")} onClick={() => toggleKeyProp(l.id, pr)}><i class={"dia " + state} /></button>;
 }
 
@@ -67,7 +67,7 @@ export function PropsPanel() {
   rev.value;
   const p = project.value, l = p?.layers.find((x) => x.id === selected.value) ?? null;
   const [linked, setLinked] = useState(true);
-  const f = frame.value;
+  const f = panelFrame.value;
   if (!p) return null;
   if (!l && selectedSound.value && p.sounds?.some((x) => x.id === selectedSound.value)) return (
     <aside class="card pane pane-props" aria-label={t("props")}>

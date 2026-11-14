@@ -1,5 +1,5 @@
 // App state, editing actions and undo/redo.
-import { signal, computed } from "@preact/signals";
+import { signal, computed, effect } from "@preact/signals";
 import type { Asset, Background, Chan, Ease, Key, Layer, Prop, Project } from "./types";
 import { PROPS, MAX_SECONDS } from "./types";
 import { apply, chanDefault, decompose, invert, localMatrix, mul, poseAt, solve, valueAt, wouldCycle, IDENTITY } from "./anim";
@@ -13,6 +13,19 @@ export const project = signal<Project | null>(null);
 export const rev = signal(0);
 export const frame = signal(0);
 export const playing = signal(false);
+/**
+ * The frame the side panels show. It follows `frame`, but only about 4 times a second while playing:
+ * redrawing every number box on every frame makes playing stutter on slow computers.
+ */
+export const panelFrame = signal(0);
+{
+  let tm: ReturnType<typeof setTimeout> | 0 = 0;
+  effect(() => {
+    const f = frame.value;
+    if (!playing.value) { if (tm) clearTimeout(tm); tm = 0; panelFrame.value = f; }
+    else if (!tm) tm = setTimeout(() => { tm = 0; panelFrame.value = frame.peek(); }, 250);
+  });
+}
 export const loop = signal(true);
 export const selected = signal<string | null>(null);
 export const mode = signal<Mode>("animate");

@@ -1,5 +1,5 @@
 // Properties: motion path, mask (clip to another part's shape) and effects (blend, blur, shadow, glow, colours).
-import { project, frame, mode, advanced, edit, live, writeProp, showPath, sketchArm, tool } from "../model/store";
+import { project, panelFrame, mode, advanced, edit, live, writeProp, showPath, sketchArm, tool } from "../model/store";
 import { valueAt, pathFrames } from "../model/anim";
 import type { Blend, Chan, Fx, Layer } from "../model/types";
 import { t, type Key as TKey } from "../i18n";
@@ -11,7 +11,7 @@ const setOn = (id: string, fn: (x: Layer) => void, now = false) => (now ? edit :
 /** A keyable value shown as a number (times `k`, e.g. 100 for percent), clamped to lo..hi (shown units). */
 function Ch({ l, label, ch, k = 1, digits = 0, suffix, lo = -Infinity, hi = Infinity, step = 0.5 }: { l: Layer; label: string; ch: Chan; k?: number; digits?: number; suffix?: string; lo?: number; hi?: number; step?: number }) {
   const put = (v: number, now: boolean) => setOn(l.id, (q) => writeProp(q, ch, Math.max(lo, Math.min(hi, v)) / k), now);
-  return <NumField label={label} value={valueAt(l, ch, frame.value) * k} step={step} digits={digits} suffix={suffix}
+  return <NumField label={label} value={valueAt(l, ch, panelFrame.value) * k} step={step} digits={digits} suffix={suffix}
     keyDot={mode.value === "animate" ? <KeyDot l={l} pr={ch} /> : undefined} onLive={(v) => put(v, false)} onCommit={(v) => put(v, true)} />;
 }
 function Swatch({ value, label, onChange }: { value: string; label: string; onChange: (v: string) => void }) {

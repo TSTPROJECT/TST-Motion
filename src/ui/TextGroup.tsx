@@ -1,6 +1,6 @@
 // Properties of a text part: the words, font, size, colours, outline, box and typewriter.
 import { useEffect, useRef, useState } from "preact/hooks";
-import { project, mode, advanced, frame } from "../model/store";
+import { project, mode, advanced, panelFrame } from "../model/store";
 import { valueAt } from "../model/anim";
 import type { Layer, TextStyle } from "../model/types";
 import { BUNDLED_FONTS, systemFonts } from "../render/text";
@@ -21,7 +21,7 @@ export function TextGroup({ l }: { l: Layer }) {
   const set = (patch: Partial<TextStyle>) => void setText(l.id, patch);
   const adv = advanced.value;
   const fonts = systemFonts();
-  const typed = valueAt(l, "type", frame.value);
+  const typed = valueAt(l, "type", panelFrame.value);
 
   return (
     <div class="grp">

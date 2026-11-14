@@ -208,7 +208,7 @@ button:disabled { cursor: default; opacity: .4; }
 .kf { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; transform: rotate(45deg); background: var(--key); border: 1.5px solid var(--key-line); padding: 0; border-radius: 2.5px; z-index: 1; touch-action: none; }
 .kf.now { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--fg); }
 .kf::after { content: ""; position: absolute; inset: -8px; }
-.playhead { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--accent); pointer-events: none; z-index: 6; }
+.playhead { position: absolute; top: 0; bottom: 0; left: 0; will-change: transform; width: 2px; margin-left: -1px; background: var(--accent); pointer-events: none; z-index: 6; }
 .playhead::before { content: ""; position: absolute; top: 4px; left: -6px; width: 14px; height: 14px; border-radius: 4px 4px 7px 7px; background: var(--accent); }
 .endzone { position: absolute; top: 0; bottom: 0; right: 0; background: repeating-linear-gradient(-45deg, transparent 0 6px, var(--line) 6px 7px); pointer-events: none; }
 .tl-empty { padding: 14px; font-size: 12.5px; color: var(--muted); }

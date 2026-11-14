@@ -71,19 +71,25 @@ export function Editor() {
   // playback
   useEffect(() => effect(() => {
     if (!playing.value) return;
-    const pp = project.value!; let start = performance.now(), f0 = frame.value, raf = 0;
-    if (f0 >= pp.frames - 1) f0 = 0;
+    // only `playing` (and opening another project) starts and stops this: reading the frame here would
+    // restart the loop, and the sound, on every frame
+    const pp = project.value!; let start = performance.now(), f0 = frame.peek(), raf = 0, on = true;
+    if (f0 >= pp.frames - 1) frame.value = f0 = 0; // at the end: play from the start
+    let last = f0;
     startAudio(f0);
     const tick = (now: number) => {
+      if (!on) return;
+      // someone jumped while playing (Home, End, a click): carry on from there
+      if (frame.peek() !== last) { start = now; f0 = last = frame.peek(); startAudio(f0); }
       const f = f0 + Math.floor(((now - start) / 1000) * pp.fps);
       if (f >= pp.frames) {
-        if (!loop.value) { frame.value = pp.frames - 1; playing.value = false; return; }
-        start = now; f0 = 0; frame.value = 0; startAudio(0);
-      } else if (f !== frame.value) frame.value = f;
+        if (!loop.peek()) { frame.value = pp.frames - 1; playing.value = false; return; }
+        start = now; f0 = last = 0; frame.value = 0; startAudio(0);
+      } else if (f !== last) frame.value = last = f;
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => { cancelAnimationFrame(raf); stopAudio(); };
+    return () => { on = false; cancelAnimationFrame(raf); stopAudio(); };
   }), []);
 
   // files: drop anywhere, paste images
