@@ -23,6 +23,7 @@ import { openFile, pickFile } from "./open";
 import { isAudioFile, startAudio, stopAudio } from "../audio/sound";
 import { addSound } from "./soundOps";
 import { openDonate } from "./donate";
+import { TimelapseMenuItem } from "./Timelapse";
 import { selKeys, clearSel, hasClip, CLIP_MARK } from "../model/keysel";
 import { copySel, pasteSel, deleteSel } from "./keyOps";
 
@@ -189,6 +190,7 @@ export function Editor() {
                 <button onClick={saveFile}><Icon n="save" />{t("save_file")}</button>
                 <button onClick={async () => { const [f] = await pickFile(".tstm,application/zip", false); if (f) { await saveNow(); await openFile(f); } }}><Icon n="folder" />{t("open_file")}</button>
                 <button onClick={() => setVersions(true)}><Icon n="history" />{t("versions")}</button>
+                <TimelapseMenuItem />
                 <button onClick={() => (settingsOpen.value = true)}><Icon n="settings" />{t("settings")}</button>
                 {!installed.value && (installPrompt.value || isIos) && <button onClick={async () => { if (installPrompt.value) await install(); else toast(t("install_ios")); }}><Icon n="install" />{t("install")}</button>}
                 <hr />

@@ -144,10 +144,68 @@ fn backup_read(app: tauri::AppHandle, path: String) -> Result<Response, String> 
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+// ---------- timelapse ----------
+// Copies the program's own window (what the user sees, nothing else on screen), made smaller to
+// fit `max_w`. Returns width and height (u32, little-endian) followed by the BGRA pixels.
+#[cfg(windows)]
+#[tauri::command]
+fn capture_window(window: tauri::WebviewWindow, max_w: u32) -> Result<Response, String> {
+    use windows::Win32::Foundation::{HWND, RECT};
+    use windows::Win32::Graphics::Gdi::*;
+    use windows::Win32::Storage::Xps::{PrintWindow, PRINT_WINDOW_FLAGS};
+    use windows::Win32::UI::WindowsAndMessaging::GetClientRect;
+    let raw = window.hwnd().map_err(|e| e.to_string())?.0 as *mut core::ffi::c_void;
+    let hwnd = HWND(raw);
+    unsafe {
+        let mut r = RECT::default();
+        GetClientRect(hwnd, &mut r).map_err(|e| e.to_string())?;
+        let (w, h) = ((r.right - r.left).max(1), (r.bottom - r.top).max(1));
+        let k = (max_w.max(16) as f64 / w as f64).min(1.0);
+        let (tw, th) = (((w as f64 * k).round() as i32).max(1), ((h as f64 * k).round() as i32).max(1));
+        let wdc = GetDC(Some(hwnd));
+        let full_dc = CreateCompatibleDC(Some(wdc));
+        let full = CreateCompatibleBitmap(wdc, w, h);
+        let old1 = SelectObject(full_dc, full.into());
+        // 1 = client area only, 2 = include GPU-drawn content (the web view)
+        let ok = PrintWindow(hwnd, full_dc, PRINT_WINDOW_FLAGS(3)).as_bool();
+        let small_dc = CreateCompatibleDC(Some(wdc));
+        let small = CreateCompatibleBitmap(wdc, tw, th);
+        let old2 = SelectObject(small_dc, small.into());
+        SetStretchBltMode(small_dc, HALFTONE);
+        let _ = StretchBlt(small_dc, 0, 0, tw, th, Some(full_dc), 0, 0, w, h, SRCCOPY);
+        let mut bi = BITMAPINFO::default();
+        bi.bmiHeader.biSize = std::mem::size_of::<BITMAPINFOHEADER>() as u32;
+        bi.bmiHeader.biWidth = tw;
+        bi.bmiHeader.biHeight = -th; // top row first
+        bi.bmiHeader.biPlanes = 1;
+        bi.bmiHeader.biBitCount = 32;
+        let mut out = vec![0u8; 8 + (tw * th * 4) as usize];
+        out[0..4].copy_from_slice(&(tw as u32).to_le_bytes());
+        out[4..8].copy_from_slice(&(th as u32).to_le_bytes());
+        SelectObject(small_dc, old2);
+        let lines = GetDIBits(small_dc, small, 0, th as u32, Some(out[8..].as_mut_ptr() as *mut _), &mut bi, DIB_RGB_COLORS);
+        SelectObject(full_dc, old1);
+        let _ = DeleteObject(small.into());
+        let _ = DeleteObject(full.into());
+        let _ = DeleteDC(small_dc);
+        let _ = DeleteDC(full_dc);
+        ReleaseDC(Some(hwnd), wdc);
+        if !ok || lines == 0 {
+            return Err("capture failed".into());
+        }
+        Ok(Response::new(out))
+    }
+}
+#[cfg(not(windows))]
+#[tauri::command]
+fn capture_window(_max_w: u32) -> Result<Response, String> {
+    Err("not supported".into())
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![startup_file_name, startup_file_bytes, backup_save, backup_list, backup_read])
+        .invoke_handler(tauri::generate_handler![startup_file_name, startup_file_bytes, backup_save, backup_list, backup_read, capture_window])
         .run(tauri::generate_context!())
         .expect("error while running TST Motion");
 }
