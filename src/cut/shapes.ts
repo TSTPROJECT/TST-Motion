@@ -202,9 +202,12 @@ export function shapeParts(alpha: Uint8Array, w: number, h: number, detail: Deta
       for (const o of N4(w)) { const j = inside(i, o); if (j >= 0 && region[j] === a && far[j] < 0) { far[j] = far[i] + 1; if (far[j] > L) L = far[j]; q.push(j); } }
     }
     const pivot = q.length ? centre(a, (i) => far[i] === 0) : centre(a);
-    const [cx, cy] = centre(a), dx = cx - bx, dy = cy - by;
-    // a separate drawing that does not touch the rest is just a piece
-    const kind: ShapeKind = !q.length ? "piece" : dy > Math.abs(dx) * 0.6 ? "leg" : -dy > Math.abs(dx) ? "top" : Math.abs(dx) > 1 ? "side" : "piece";
+    // named by where it joins the body: underneath = leg, on top = top, else side
+    // (a separate drawing that does not touch the rest is just a piece)
+    const k0 = root * 4, hw = Math.max(1, (box[k0 + 2] - box[k0]) / 2), hh = Math.max(1, (box[k0 + 3] - box[k0 + 1]) / 2);
+    const [jx, jy] = pa === root ? pivot : centre(a);
+    const ux = (jx - bx) / hw, uy = (jy - by) / hh;
+    const kind: ShapeKind = !q.length ? "piece" : uy > 0.45 ? "leg" : uy < -0.45 && -uy > Math.abs(ux) * 0.7 ? "top" : "side";
     const num = ++counts[kind], first = parts.length;
     parts.push({ kind, n: num, tip: 0, pivot, parent: pIdx, z: 6 + 0.01 * num });
     idx.set(a, first);

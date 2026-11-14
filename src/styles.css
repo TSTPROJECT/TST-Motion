@@ -451,3 +451,15 @@ textarea.field.txt { height: auto; min-height: 64px; padding: 8px 10px; resize: 
 .recpill:hover { border-color: #e5322d; }
 @keyframes recblink { 50% { opacity: .25; } }
 @media (prefers-reduced-motion: reduce) { .recpill i { animation: none; } }
+/* first-run guide */
+.guide-ring { position: fixed; z-index: 80; border: 2px solid var(--accent); border-radius: 12px; box-shadow: 0 0 0 9999px rgba(10,12,20,.35); pointer-events: none; transition: all .18s ease; }
+.guide-card { position: fixed; z-index: 81; background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px 12px; box-shadow: 0 12px 36px rgba(0,0,0,.35); }
+.guide-card p { margin: 6px 0 10px; line-height: 1.55; font-size: 13.5px; }
+.guide-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 15px; }
+.guide-dots { display: flex; gap: 5px; margin-bottom: 10px; }
+.guide-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); }
+.guide-dots i.on { background: var(--accent); width: 16px; border-radius: 3px; }
+.guide-btns { display: flex; align-items: center; gap: 6px; }
+@media (prefers-reduced-motion: reduce) { .guide-ring { transition: none; } }
+.sample-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+.sample-row .hint-s { margin: 0; }

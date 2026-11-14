@@ -72,3 +72,11 @@ export async function openBackup(path: string, file: string) {
     await openFile(new File([bytes], file + ".tstm"));
   } catch { toast(t("open_failed"), true); }
 }
+
+/** The sample project that comes with the program (a waving robot), opened as a new copy. */
+export async function openSample() {
+  try {
+    const b = await (await fetch("sample/robot.tstm")).blob();
+    await openFile(new File([b], "robot.tstm", { type: "application/zip" }));
+  } catch { toast(t("open_failed"), true); }
+}

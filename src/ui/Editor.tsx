@@ -24,6 +24,7 @@ import { isAudioFile, startAudio, stopAudio } from "../audio/sound";
 import { addSound } from "./soundOps";
 import { openDonate } from "./donate";
 import { TimelapseMenuItem } from "./Timelapse";
+import { Guide, startGuide, guideFirstRun } from "./Guide";
 import { selKeys, clearSel, hasClip, CLIP_MARK } from "../model/keysel";
 import { copySel, pasteSel, deleteSel } from "./keyOps";
 
@@ -86,6 +87,7 @@ export function Editor() {
   }), []);
 
   // files: drop anywhere, paste images
+  useEffect(() => guideFirstRun(), []);
   useEffect(() => {
     void askPersistent();
     let depth = 0;
@@ -163,7 +165,7 @@ export function Editor() {
             <small class={saving.value ? "busy" : ""}>{saving.value ? t("saving") : t("saved_local")} · <span class="num">{p.w}×{p.h}</span></small>
           </div>
         </div>
-        <div class="seg modeseg" role="group" aria-label="Mode">
+        <div class="seg modeseg" role="group" aria-label="Mode" data-guide="mode">
           <button aria-pressed={mode.value === "setup"} title={t("mode_setup_hint")} onClick={() => setMode("setup")}>{t("mode_setup")}</button>
           <button class="anim" aria-pressed={mode.value === "animate"} title={t("mode_animate_hint")} onClick={() => setMode("animate")}>{t("mode_animate")}</button>
         </div>
@@ -173,10 +175,10 @@ export function Editor() {
         </div>
         <button class="ibtn ghost" title={t("undo")} aria-label={t("undo")} disabled={!canUndo.value} onClick={undo}><Icon n="undo" /></button>
         <button class="ibtn ghost hide-sm" title={t("redo")} aria-label={t("redo")} disabled={!canRedo.value} onClick={redo}><Icon n="redo" /></button>
-        <button class="btn hide-sm" onClick={pickImages}><Icon n="import" />{t("import")}</button>
-        <button class="btn primary hide-sm" onClick={() => setExportInfo(true)}><Icon n="export" />{t("export")}</button>
+        <button class="btn hide-sm" data-guide="import" onClick={pickImages}><Icon n="import" />{t("import")}</button>
+        <button class="btn primary hide-sm" data-guide="export" onClick={() => setExportInfo(true)}><Icon n="export" />{t("export")}</button>
         <div class="menu-wrap">
-          <button class="ibtn" title={t("more")} aria-label={t("more")} aria-expanded={menu} onClick={() => setMenu(!menu)}><Icon n="more" /></button>
+          <button class="ibtn" data-guide="more" title={t("more")} aria-label={t("more")} aria-expanded={menu} onClick={() => setMenu(!menu)}><Icon n="more" /></button>
           {menu && (
             <>
               <div style={{ position: "fixed", inset: "0", zIndex: 39 }} onClick={() => setMenu(false)} />
@@ -191,6 +193,7 @@ export function Editor() {
                 <button onClick={async () => { const [f] = await pickFile(".tstm,application/zip", false); if (f) { await saveNow(); await openFile(f); } }}><Icon n="folder" />{t("open_file")}</button>
                 <button onClick={() => setVersions(true)}><Icon n="history" />{t("versions")}</button>
                 <TimelapseMenuItem />
+                <button onClick={startGuide}><Icon n="lifebuoy" />{t("guide_open")}</button>
                 <button onClick={() => (settingsOpen.value = true)}><Icon n="settings" />{t("settings")}</button>
                 {!installed.value && (installPrompt.value || isIos) && <button onClick={async () => { if (installPrompt.value) await install(); else toast(t("install_ios")); }}><Icon n="install" />{t("install")}</button>}
                 <hr />
@@ -215,6 +218,7 @@ export function Editor() {
         <PropsPanel />
       </div>
       <Timeline />
+      <Guide />
 
       {settingsOpen.value && <SettingsDialog />}
       {versions && <VersionsDialog onClose={() => setVersions(false)} />}

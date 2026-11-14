@@ -113,7 +113,7 @@ export function Timeline() {
   const layers = [...p.layers].reverse();
 
   return (
-    <section class="card tl" aria-label={t("timeline")}>
+    <section class="card tl" aria-label={t("timeline")} data-guide="timeline">
       <div class="tl-h">
         <button class="ibtn ghost" title={t("to_start")} aria-label={t("to_start")} onClick={() => { playing.value = false; frame.value = 0; }}><Icon n="start" /></button>
         <button class="ibtn ghost" title={t("prev_frame")} aria-label={t("prev_frame")} onClick={() => { playing.value = false; frame.value = Math.max(0, f - 1); }}><Icon n="prev" /></button>

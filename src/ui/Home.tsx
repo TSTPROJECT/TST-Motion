@@ -6,7 +6,7 @@ import { lang, setLang, t } from "../i18n";
 import { Icon } from "./icons";
 import { toggleTheme, isDark, theme, installPrompt, installed, isIos, install, toast } from "./shell";
 import { confirmBox } from "./Dialogs";
-import { createProject, openSaved, openFile, pickFile } from "./open";
+import { createProject, openSaved, openFile, pickFile, openSample } from "./open";
 import { BackupsDialog, CrashNote } from "./Recovery";
 
 const PRESETS: Array<{ k: string; w: number; h: number; label: () => string }> = [
@@ -64,6 +64,10 @@ export function Home() {
                 </button>
               );
             })}
+          </div>
+          <div class="sample-row">
+            <button class="btn" disabled={busy} onClick={() => run(openSample)}><Icon n="star" />{t("sample_open")}</button>
+            <span class="hint-s">{t("sample_note")}</span>
           </div>
         </section>
 
