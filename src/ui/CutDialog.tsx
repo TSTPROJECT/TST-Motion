@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { project, cutToLayer, replaceAsset, splitLayer, type Piece } from "../model/store";
 import { addAsset, getAssetBlob } from "../io/assets";
 import * as M from "../cut/mask";
+import { shapeParts } from "../cut/shapes";
 import { aiState, aiProgress, aiError, checkModel, downloadModel, embed, decode, MODEL_MB, poseState, poseProgress, poseError, checkPose, downloadPose, guessParts, POSE_MB } from "../cut/ai";
 import { jointOverlap, meeting, seamFill, snapPivot } from "../cut/parts";
 import { t, type Key } from "../i18n";
@@ -22,8 +23,8 @@ const TOOLS: Array<{ id: CutTool; icon: string; key: string }> = [
 const PARTS: Key[] = ["part_head", "part_hair", "part_face", "part_body", "part_arm_l", "part_arm_r", "part_hand", "part_leg_l", "part_leg_r", "part_cloth", "part_item"];
 
 const PREFS = "tstm-cut";
-interface Prefs { tool: CutTool; tol: number; contig: boolean; size: number; soft: boolean; level: 0 | 1 | 2; detail: 0 | 1 | 2; magnet: boolean }
-const DEF: Prefs = { tool: "ai", tol: 32, contig: true, size: 40, soft: true, level: 1, detail: 1, magnet: true };
+interface Prefs { tool: CutTool; tol: number; contig: boolean; size: number; soft: boolean; level: 0 | 1 | 2; detail: 0 | 1 | 2; magnet: boolean; subject: "person" | "shape" }
+const DEF: Prefs = { tool: "ai", tol: 32, contig: true, size: 40, soft: true, level: 1, detail: 1, magnet: true, subject: "person" };
 const loadPrefs = (): Prefs => { try { return { ...DEF, ...JSON.parse(localStorage.getItem(PREFS) || "{}") }; } catch { return DEF; } };
 
 const MAX_PIXELS = 50e6; // about 7000×7000; more would not fit in a 4 GB machine's memory
@@ -684,9 +685,25 @@ export function CutDialog() {
     // a picture with a solid background (a photo, a JPG): leave the plain colour around the character out
     if (clear < alpha.length * 0.01) { const bg = M.background(w.img, prefsRef.current.tol); for (let i = 0; i < alpha.length; i++) if (bg[i]) alpha[i] = 0; }
     const b = M.bounds(iw, ih, (i) => (alpha[i] > 16 ? 1 : 0)) ?? { x: 0, y: 0, w: iw, h: ih };
-    const r = await guessParts(aiKey(), w.first, alpha, [b.x, b.y, b.w, b.h], prefsRef.current.detail);
+    const byShape = prefsRef.current.subject === "shape";
+    const r = byShape ? null : await guessParts(aiKey(), w.first, alpha, [b.x, b.y, b.w, b.h], prefsRef.current.detail);
     if (W.current !== w) return;
-    if (!r) { toast(t("auto_no_person"), true); return; }
+    if (!r) {
+      // no person: an animal or a thing, so go by its shape (thick body, what sticks out of it)
+      const sh = shapeParts(alpha, iw, ih, prefsRef.current.detail);
+      if (W.current !== w) return;
+      if (!sh) { toast(t(byShape ? "auto_no_shape" : "auto_no_person"), true); return; }
+      const keyOf = (i: number) => (i === 0 ? "part_body" : `shape_${i}`);
+      w.labels = sh.labels; w.lundo = []; w.lredo = [];
+      setParts(sh.parts.map((q, i) => ({
+        key: keyOf(i), pivot: q.pivot, parent: q.parent < 0 ? null : keyOf(q.parent), z: q.z, n: 0,
+        name: q.kind === "body" ? t("part_body") : t(`shape_${q.kind}` as Key, { n: q.n }) + (q.tip ? ` ${t("shape_tip", { n: q.tip })}` : ""),
+      })));
+      setActive(1); activeRef.current = 1;
+      afterLabels();
+      toast(t(byShape ? "auto_shape_done" : "auto_by_shape", { n: sh.parts.length }));
+      return;
+    }
     w.labels = r.labels; w.lundo = []; w.lredo = [];
     setParts(r.parts.map((q) => ({ key: q.key, name: t(q.key as Key), pivot: q.pivot, parent: q.parent, z: q.z, n: 0 })));
     setActive(1); activeRef.current = 1;
@@ -791,7 +808,7 @@ export function CutDialog() {
           <h4>{toolName(tool)}</h4>
           {tool === "ai" && <AiPanel sign={aiSign} setSign={(v) => setAiSign(v)} looking={aiLooking} points={aiPts.current.length} clear={endAi}
             level={prefs.level} setLevel={(v) => { upd({ level: v }); prefsRef.current = { ...prefsRef.current, level: v }; aiRedo(); }} />}
-          {tool === "auto" && <AutoPanel detail={prefs.detail} setDetail={(v) => upd({ detail: v })} parts={parts} active={active}
+          {tool === "auto" && <AutoPanel detail={prefs.detail} setDetail={(v) => upd({ detail: v })} subject={prefs.subject} setSubject={(v) => { upd({ subject: v }); prefsRef.current = { ...prefsRef.current, subject: v }; }} parts={parts} active={active}
             setActive={(k) => { setActive(k); activeRef.current = k; }} guess={guess} addPart={addPart} clear={clearGuess} make={makeLayers}
             busy={!!busy} size={prefs.size} setSize={(v) => upd({ size: v })} />}
           {(tool === "wand" || tool === "lasso" || (tool === "ai" && aiState.value === "ready")) && (
@@ -883,26 +900,44 @@ function AiPanel({ sign, setSign, looking, points, clear, level, setLevel }: { s
   </>;
 }
 
-function AutoPanel({ detail, setDetail, parts, active, setActive, guess, addPart, clear, make, busy, size, setSize }: {
-  detail: 0 | 1 | 2; setDetail: (v: 0 | 1 | 2) => void; parts: AutoPart[] | null; active: number; setActive: (k: number) => void;
+function AutoPanel({ detail, setDetail, subject, setSubject, parts, active, setActive, guess, addPart, clear, make, busy, size, setSize }: {
+  detail: 0 | 1 | 2; setDetail: (v: 0 | 1 | 2) => void; subject: "person" | "shape"; setSubject: (v: "person" | "shape") => void; parts: AutoPart[] | null; active: number; setActive: (k: number) => void;
   guess: () => void; addPart: (k: Key) => void; clear: () => void; make: () => void; busy: boolean; size: number; setSize: (v: number) => void;
 }) {
   const ai = aiState.value, st = poseState.value;
   const need = (ai === "ready" ? 0 : MODEL_MB) + POSE_MB;
+  const pick = (
+    <div class="cw-range">{t("auto_subject")}
+      <div class="seg" role="group" aria-label={t("auto_subject")} style={{ width: "100%" }}>
+        <button style={{ flex: "1" }} aria-pressed={subject === "person"} onClick={() => setSubject("person")}><Icon n="figure" />{t("auto_subject_person")}</button>
+        <button style={{ flex: "1" }} aria-pressed={subject === "shape"} onClick={() => setSubject("shape")}><Icon n="sparkle" />{t("auto_subject_shape")}</button>
+      </div>
+    </div>
+  );
+  if (subject === "shape") return <>{pick}<p class="muted cw-note">{t("auto_shape_about")}</p><AutoBody {...{ detail, setDetail, parts, active, setActive, guess, addPart, clear, make, busy, size, setSize }} /></>;
   if (ai === "downloading" || st === "downloading") {
     const v = ai === "downloading" ? aiProgress.value * (MODEL_MB / need) : (need - POSE_MB) / need + poseProgress.value * (POSE_MB / need);
     return <>
+      {pick}
       <p class="cw-note">{t("auto_downloading", { mb: need })}</p>
       <div class="xbar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(v * 100)}><i style={{ width: `${v * 100}%` }} /></div>
       <p class="muted num cw-note">{Math.round(v * 100)}%</p>
     </>;
   }
-  if (st === "loading" || st === "unknown" || ai === "loading" || ai === "unknown") return <p class="muted cw-note">{t("ai_starting")}</p>;
+  if (st === "loading" || st === "unknown" || ai === "loading" || ai === "unknown") return <>{pick}<p class="muted cw-note">{t("ai_starting")}</p></>;
   if (st !== "ready" || ai !== "ready") return <>
+    {pick}
     <p class="cw-note">{t("auto_about", { mb: need })}</p>
     {(st === "error" || ai === "error") && <p class="cw-note" style={{ color: "var(--danger)" }}>{t("ai_failed", { msg: poseError.value || aiError.value })}</p>}
     <button class="btn primary" onClick={() => void downloadPose()}><Icon n="install" />{t(st === "error" || ai === "error" ? "ai_retry" : "auto_download", { mb: need })}</button>
   </>;
+  return <>{pick}<AutoBody {...{ detail, setDetail, parts, active, setActive, guess, addPart, clear, make, busy, size, setSize }} /></>;
+}
+
+function AutoBody({ detail, setDetail, parts, active, setActive, guess, addPart, clear, make, busy, size, setSize }: {
+  detail: 0 | 1 | 2; setDetail: (v: 0 | 1 | 2) => void; parts: AutoPart[] | null; active: number; setActive: (k: number) => void;
+  guess: () => void; addPart: (k: Key) => void; clear: () => void; make: () => void; busy: boolean; size: number; setSize: (v: number) => void;
+}) {
   const total = parts?.reduce((n, q) => n + (q.n > 0 ? 1 : 0), 0) ?? 0;
   return <>
     <div class="cw-range">{t("auto_detail")}
