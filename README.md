@@ -12,7 +12,7 @@ AI ทั้งหมดทำงานในเครื่องคุณ ไ�
 
 ## ดาวน์โหลด / Download
 
-ไปที่หน้า [Releases](../../releases/latest) แล้วดาวน์โหลดไฟล์ `TST Motion_x.y.z_x64-setup.exe` แล้วดับเบิลคลิกเพื่อติดตั้ง
+ไปที่หน้า [Releases](../../releases/latest) แล้วดาวน์โหลดไฟล์ที่ลงท้ายด้วย `_x64-setup.exe` แล้วดับเบิลคลิกเพื่อติดตั้ง
 (Windows 10/11, 64 บิต) จะมีไอคอนบนเดสก์ท็อปให้
 
 ตัวติดตั้งยังไม่มีลายเซ็นดิจิทัล Windows อาจเตือน "Windows protected your PC" ให้กด **More info → Run anyway**
