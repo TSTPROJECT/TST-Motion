@@ -4,6 +4,7 @@ import { signal } from "@preact/signals";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { project, cutToLayer, replaceAsset, splitLayer, type Piece } from "../model/store";
 import { addAsset, getAssetBlob } from "../io/assets";
+import type { Asset } from "../model/types";
 import * as M from "../cut/mask";
 import { shapeParts } from "../cut/shapes";
 import { aiState, aiProgress, aiError, checkModel, downloadModel, embed, decode, MODEL_MB, poseState, poseProgress, poseError, checkPose, downloadPose, guessParts, POSE_MB } from "../cut/ai";
@@ -27,7 +28,14 @@ interface Prefs { tool: CutTool; tol: number; contig: boolean; size: number; sof
 const DEF: Prefs = { tool: "ai", tol: 32, contig: true, size: 40, soft: true, level: 1, detail: 1, magnet: true, subject: "person" };
 const loadPrefs = (): Prefs => { try { return { ...DEF, ...JSON.parse(localStorage.getItem(PREFS) || "{}") }; } catch { return DEF; } };
 
-const MAX_PIXELS = 50e6; // about 7000×7000; more would not fit in a 4 GB machine's memory
+/**
+ * Pictures bigger than this are cut on a smaller working copy (quick to paint on, fits in memory);
+ * the finished parts are then cut out of the full picture, so nothing is lost.
+ */
+function workPixels() {
+  const mem = (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 4;
+  return mem >= 8 ? 24e6 : mem >= 4 ? 16e6 : 8e6;
+}
 const TINT = [59, 116, 255, 70]; // light tint over chosen pixels
 const DIM = [12, 14, 22, 150]; // darkens what is not chosen
 const EDGE = [80, 160, 255]; // line around the selection
@@ -43,6 +51,8 @@ interface AutoPart { key: string; name: string; pivot: [number, number] | null; 
 
 interface Work {
   img: M.Img; mask: Uint8Array; first: M.Img; // the picture now, and as it was when the window opened
+  /** the picture at full size (it changes as parts are cut away), its size, and full size ÷ working size */
+  src: Blob; fw: number; fh: number; sx: number; sy: number;
   pic: OffscreenCanvas; over: OffscreenCanvas; overCtx: OffscreenCanvasRenderingContext2D;
   stroke: OffscreenCanvas; strokeCtx: OffscreenCanvasRenderingContext2D;
   undo: Uint8Array[]; redo: Uint8Array[]; maxUndo: number; any: boolean;
@@ -316,9 +326,10 @@ export function CutDialog() {
     (async () => {
       const blob = getAssetBlob(asset.id);
       if (!blob) { toast(t("cut_no_image"), true); close(); return; }
-      if (asset.w * asset.h > MAX_PIXELS) { toast(t("cut_too_big"), true); close(); return; }
       openedWith.current = asset.id;
-      const bmp = await createImageBitmap(blob, { premultiplyAlpha: "none", colorSpaceConversion: "none" });
+      const fw = asset.w, fh = asset.h, k = Math.min(1, Math.sqrt(workPixels() / (fw * fh)));
+      const small = k < 1 ? { resizeWidth: Math.max(1, Math.round(fw * k)), resizeHeight: Math.max(1, Math.round(fh * k)), resizeQuality: "high" as const } : {};
+      const bmp = await createImageBitmap(blob, { premultiplyAlpha: "none", colorSpaceConversion: "none", ...small });
       const iw = bmp.width, ih = bmp.height;
       const pic = new OffscreenCanvas(iw, ih), pg = pic.getContext("2d", { willReadFrequently: true })!;
       pg.drawImage(bmp, 0, 0); bmp.close();
@@ -327,6 +338,7 @@ export function CutDialog() {
       const over = new OffscreenCanvas(iw, ih), stroke = new OffscreenCanvas(iw, ih);
       W.current = {
         img: { w: iw, h: ih, data }, first: { w: iw, h: ih, data }, mask: new Uint8Array(iw * ih),
+        src: blob, fw, fh, sx: fw / iw, sy: fh / ih,
         pic, over, overCtx: over.getContext("2d")!, stroke, strokeCtx: stroke.getContext("2d", { willReadFrequently: true })!,
         undo: [], redo: [], any: false, maxUndo: Math.max(3, Math.min(20, Math.floor(120e6 / (iw * ih)))),
         z: 1, ox: 0, oy: 0, fitted: false, auto: true, lasso: null, poly: false, lassoDown: null, brushAt: null, last: null, hover: null, space: false,
@@ -621,6 +633,37 @@ export function CutDialog() {
     changed();
   };
   const restOf = (m: Uint8Array) => { const w = W.current!; return M.extract(w.img, { x: 0, y: 0, w: w.img.w, h: w.img.h }, (i) => 255 - m[i]); };
+  const whole = () => ({ x: 0, y: 0, w: W.current!.img.w, h: W.current!.img.h });
+  /** The full-size picture, decoded once for a whole job (only needed when working on a smaller copy). */
+  const fullPicture = async () => {
+    const w = W.current!;
+    return w.sx !== 1 || w.sy !== 1 ? createImageBitmap(w.src, { premultiplyAlpha: "none", colorSpaceConversion: "none" }) : null;
+  };
+  /**
+   * A piece as a PNG at the picture's real size, with where it sits in the picture.
+   * `box` and `weight` are in working-copy pixels; on a big picture the edge is smoothed up to full size.
+   */
+  const output = async (box: M.Box, weight: (i: number) => number, full: ImageBitmap | null, ready?: Uint8ClampedArray) => {
+    const w = W.current!;
+    if (!full) return { blob: await png(ready ?? M.extract(w.img, box, weight), box.w, box.h), x: box.x, y: box.y, w: box.w, h: box.h };
+    const mk = new Uint8ClampedArray(box.w * box.h * 4);
+    for (let y = 0; y < box.h; y++) for (let x = 0, i = (box.y + y) * w.img.w + box.x, o = y * box.w * 4 + 3; x < box.w; x++, i++, o += 4) mk[o] = weight(i);
+    const mc = new OffscreenCanvas(box.w, box.h);
+    mc.getContext("2d")!.putImageData(new ImageData(mk, box.w, box.h), 0, 0);
+    const x0 = Math.max(0, Math.floor(box.x * w.sx)), y0 = Math.max(0, Math.floor(box.y * w.sy));
+    const x1 = Math.min(w.fw, Math.ceil((box.x + box.w) * w.sx)), y1 = Math.min(w.fh, Math.ceil((box.y + box.h) * w.sy));
+    const c = new OffscreenCanvas(Math.max(1, x1 - x0), Math.max(1, y1 - y0)), g = c.getContext("2d")!;
+    g.drawImage(full, x0, y0, c.width, c.height, 0, 0, c.width, c.height);
+    g.globalCompositeOperation = "destination-in"; g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
+    g.drawImage(mc, box.x * w.sx - x0, box.y * w.sy - y0, box.w * w.sx, box.h * w.sy);
+    return { blob: await c.convertToBlob({ type: "image/png" }), x: x0, y: y0, w: c.width, h: c.height };
+  };
+  /** Keep the picture left after cutting (full size); returns its working copy too. */
+  const keepRest = async (rm: Uint8Array, full: ImageBitmap | null) => {
+    const w = W.current!, rest = restOf(rm), r = await output(whole(), (i) => 255 - rm[i], full, rest);
+    w.src = r.blob;
+    return { rest, asset: await addAsset(project.value!.id, asset!.name, r.blob, r.w, r.h) };
+  };
 
   const cut = (copy: boolean) => work(t("cut_working"), async () => {
     const w = W.current!, l = project.value?.layers.find((x) => x.id === id); if (!l || !asset) return;
@@ -629,10 +672,14 @@ export function CutDialog() {
     if (!box) { toast(t("cut_nothing"), true); return; }
     const pid = project.value!.id;
     const pieceName = name.trim() || t("cut_piece_name", { name: l.name });
-    const pa = await addAsset(pid, pieceName, await png(M.extract(w.img, box, (i) => m[i]), box.w, box.h), box.w, box.h);
-    let rest: Uint8ClampedArray | null = null, ra = null;
-    if (!copy) { rest = restOf(rm); ra = await addAsset(pid, asset.name, await png(rest, w.img.w, w.img.h), w.img.w, w.img.h); }
-    const piece: Piece = { asset: pa, x: box.x, y: box.y, name: pieceName };
+    const full = await fullPicture();
+    let rest: Uint8ClampedArray | null = null, ra: Asset | null = null, pc;
+    try {
+      pc = await output(box, (i) => m[i], full);
+      if (!copy) ({ rest, asset: ra } = await keepRest(rm, full));
+    } finally { full?.close(); }
+    const pa = await addAsset(pid, pieceName, pc.blob, pc.w, pc.h);
+    const piece: Piece = { asset: pa, x: pc.x, y: pc.y, name: pieceName };
     cutToLayer(l.id, piece, ra);
     toast(t(copy ? "cut_copied" : "cut_done", { name: pieceName }));
     setName("");
@@ -640,17 +687,16 @@ export function CutDialog() {
   });
   const erase = () => work(t("cut_working"), async () => {
     const w = W.current; if (!w || !asset || !M.amount(w.mask)) { toast(t("cut_nothing"), true); return; }
-    const rest = restOf(outMasks().rest);
-    replaceAsset(id!, await addAsset(project.value!.id, asset.name, await png(rest, w.img.w, w.img.h), w.img.w, w.img.h));
-    usePicture(rest);
+    const full = await fullPicture();
+    try { const r = await keepRest(outMasks().rest, full); replaceAsset(id!, r.asset); usePicture(r.rest); } finally { full?.close(); }
   });
   const removeBg = () => work(t("cut_working"), async () => {
     const w = W.current; if (!w || !asset) return;
     const bg = M.background(w.img, prefsRef.current.tol);
     if (!M.amount(bg)) { toast(t("cut_no_bg"), true); return; }
-    const rest = restOf(outMasks(prefsRef.current.soft ? M.grow(bg, w.img.w, w.img.h) : bg).rest);
-    replaceAsset(id!, await addAsset(project.value!.id, asset.name, await png(rest, w.img.w, w.img.h), w.img.w, w.img.h));
-    usePicture(rest); toast(t("cut_bg_done"));
+    const full = await fullPicture();
+    try { const r = await keepRest(outMasks(prefsRef.current.soft ? M.grow(bg, w.img.w, w.img.h) : bg).rest, full); replaceAsset(id!, r.asset); usePicture(r.rest); } finally { full?.close(); }
+    toast(t("cut_bg_done"));
   });
   const split = () => work(t("cut_working"), async () => {
     const w = W.current, l = project.value?.layers.find((x) => x.id === id); if (!w || !l) return;
@@ -664,13 +710,15 @@ export function CutDialog() {
       const x = i % iw, y = (i - x) / iw, b = bx[k];
       if (x < b[0]) b[0] = x; if (y < b[1]) b[1] = y; if (x > b[2]) b[2] = x; if (y > b[3]) b[3] = y;
     }
-    const pieces: Piece[] = [], pid = project.value!.id;
-    for (let k = 1; k <= count; k++) {
-      const [x0, y0, x1, y1] = bx[k]; if (x1 < 0) continue;
-      const box = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 }, nm = `${l.name} ${k}`;
-      const a = await addAsset(pid, nm, await png(M.extract(w.img, box, (i) => (labels[i] === k ? 255 : 0)), box.w, box.h), box.w, box.h);
-      pieces.push({ asset: a, x: box.x, y: box.y, name: nm });
-    }
+    const pieces: Piece[] = [], pid = project.value!.id, full = await fullPicture();
+    try {
+      for (let k = 1; k <= count; k++) {
+        const [x0, y0, x1, y1] = bx[k]; if (x1 < 0) continue;
+        const box = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 }, nm = `${l.name} ${k}`;
+        const o = await output(box, (i) => (labels[i] === k ? 255 : 0), full);
+        pieces.push({ asset: await addAsset(pid, nm, o.blob, o.w, o.h), x: o.x, y: o.y, name: nm });
+      }
+    } finally { full?.close(); }
     splitLayer(l.id, pieces);
     toast(t("cut_split_done", { n: pieces.length }));
     close();
@@ -757,7 +805,8 @@ export function CutDialog() {
     // and a thin edge along every other place two parts touch, so no hairline shows between them
     const zOf = new Map(plan.map((pc) => [pc.k, pc.q.z]));
     for (const [k, more] of seamFill(lab, iw, ih, (k) => zOf.get(k) ?? -1)) extra.set(k, (extra.get(k) ?? []).concat(more));
-    for (const pc of plan) {
+    const full = await fullPicture();
+    try { for (const pc of plan) {
       // only solid pixels: a see-through edge drawn twice would look darker
       const k = pc.k, b = bx[k], more = extra.get(k)?.filter((i) => w.img.data[i * 4 + 3] >= 250), mine = more ? new Uint8Array(lab.length) : null;
       if (more) for (const i of more) {
@@ -765,9 +814,11 @@ export function CutDialog() {
         if (x < b[0]) b[0] = x; if (y < b[1]) b[1] = y; if (x > b[2]) b[2] = x; if (y > b[3]) b[3] = y;
       }
       const box = { x: b[0], y: b[1], w: b[2] - b[0] + 1, h: b[3] - b[1] + 1 };
-      const a = await addAsset(pid, pc.q.name, await png(M.extract(w.img, box, (i) => (lab[i] === k || mine?.[i] ? 255 : 0)), box.w, box.h), box.w, box.h);
-      pieces.push({ asset: a, x: box.x, y: box.y, name: pc.q.name, pivot: pc.pivot, parent: pc.parent, bend: pc.bend });
-    }
+      const o = await output(box, (i) => (lab[i] === k || mine?.[i] ? 255 : 0), full);
+      const a = await addAsset(pid, pc.q.name, o.blob, o.w, o.h);
+      // joints were found on the working copy: put them on the full picture
+      pieces.push({ asset: a, x: o.x, y: o.y, name: pc.q.name, pivot: [pc.pivot[0] * w.sx, pc.pivot[1] * w.sy], parent: pc.parent, bend: pc.bend * w.sx });
+    } } finally { full?.close(); }
     splitLayer(l.id, pieces);
     toast(t("auto_done", { n: pieces.length }));
     close();

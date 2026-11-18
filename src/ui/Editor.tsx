@@ -43,6 +43,7 @@ async function importNow(files: File[]) {
     toast(t("imported", { n: r.layers.length }));
   }
   if (r.failed.length) toast(t("import_failed", { names: r.failed.slice(0, 3).join(", ") }), true);
+  if (r.shrunk.length) toast(t("import_shrunk", { names: r.shrunk.slice(0, 2).join(", ") }));
 }
 export const pickImages = async () => importNow(await pickFile(ACCEPT, true));
 

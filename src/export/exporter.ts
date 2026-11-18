@@ -168,12 +168,41 @@ function pngJob(name: string, folder: FileSystemDirectoryHandle, base: string, t
   };
 }
 
-/** Full-size images for export (the editor itself may use smaller copies to save memory). */
-async function fullImages(p: Project) {
-  const map = new Map<string, ImageBitmap>();
+/** Biggest picture the graphics card takes in one piece. */
+function maxTexture() {
+  try { const g = new OffscreenCanvas(1, 1).getContext("webgl2"); const n = g?.getParameter(g.MAX_TEXTURE_SIZE); if (n) return n as number; } catch { /* no WebGL */ }
+  return 8192;
+}
+
+/**
+ * Images for export (the editor itself uses smaller copies to save memory). Each is kept as sharp as
+ * the video can show it, with room to grow (scaled up, camera zoom), but never bigger than the original
+ * or than the graphics card can take: a few 50-megapixel drawings would otherwise fill the memory.
+ */
+async function fullImages(p: Project, outScale: number) {
+  const map = new Map<string, ImageBitmap>(), lim = maxTexture();
+  const big = (l: Project["layers"][number]) => {
+    let s = 0;
+    for (const ch of ["sx", "sy"]) { s = Math.max(s, Math.abs(l.base[ch] ?? 1)); for (const k of l.tracks[ch] ?? []) s = Math.max(s, Math.abs(k.v)); }
+    return s;
+  };
+  let zoom = 1; // the camera zooms everything
+  for (const l of p.layers) if (l.camera) zoom = Math.max(zoom, big(l));
+  // a part's size also comes from the parts it follows
+  const scaleOf = (l: Project["layers"][number]): number => {
+    let s = 1;
+    for (let q: typeof l | undefined = l, n = 0; q && n < 50; q = p.layers.find((x) => x.id === q!.parent), n++) s *= big(q);
+    return s;
+  };
   for (const a of p.assets) {
     const blob = getAssetBlob(a.id); if (!blob) continue;
-    map.set(a.id, await createImageBitmap(blob, { premultiplyAlpha: "premultiply" }));
+    let s = 0;
+    for (const l of p.layers) if (l.asset === a.id || l.swaps?.includes(a.id)) s = Math.max(s, scaleOf(l));
+    const long = Math.max(a.w, a.h);
+    const want = Math.max(2048, Math.ceil(long * (s || 1) * outScale * zoom * 1.5));
+    const k = Math.min(1, want / long, lim / long);
+    const opts: ImageBitmapOptions = { premultiplyAlpha: "premultiply", ...(k < 1 ? { resizeWidth: Math.max(1, Math.round(a.w * k)), resizeHeight: Math.max(1, Math.round(a.h * k)), resizeQuality: "high" as const } : {}) };
+    map.set(a.id, await createImageBitmap(blob, opts));
   }
   return map;
 }
@@ -185,7 +214,7 @@ export async function runExport(project: Project, dir: FileSystemDirectoryHandle
   const needSee = o.formats.some((f) => f === "webm" || f === "mov" || f === "png" || (f === "gif" && o.gifTransparent));
   const needSolid = o.formats.some((f) => f === "mp4" || (f === "gif" && !o.gifTransparent));
 
-  const images = await fullImages(p);
+  const images = await fullImages(p, Math.max(W / p.w, H / p.h));
   const see = new OffscreenCanvas(W, H), solid = new OffscreenCanvas(W, H);
   const rSee = needSee ? createRenderer(see, { preserve: true, image: (id) => images.get(id) }) : null;
   const rSolid = needSolid ? createRenderer(solid, { preserve: true, image: (id) => images.get(id) }) : null;

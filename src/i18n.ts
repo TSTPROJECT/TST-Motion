@@ -386,6 +386,7 @@ const th = {
   guide_more: "บันทึกเป็นไฟล์ งานย้อนหลัง อัดไทม์แลปส์การทำงาน และเปิดคู่มือนี้อีกครั้ง งานของคุณบันทึกในเครื่องอัตโนมัติ",
   sample_open: "เปิดตัวอย่าง: หุ่นยนต์โบกมือ",
   sample_note: "ดูว่าชิ้นส่วน จุดหมุน และคีย์เฟรมทำงานอย่างไร แล้วลองแก้ได้เลย (เปิดเป็นสำเนาใหม่ทุกครั้ง)",
+  import_shrunk: "รูปใหญ่เกินกว่าที่โปรแกรมรับได้ (เกิน 16000 พิกเซลต่อด้าน หรือ 160 ล้านพิกเซล) จึงย่อลงพอดีให้: {names}",
 };
 export type Key = keyof typeof th;
 const en: Record<Key, string> = {
@@ -764,6 +765,7 @@ const en: Record<Key, string> = {
   guide_more: "Save to a file, earlier versions, record a work timelapse, and open this guide again. Your work saves on this computer by itself.",
   sample_open: "Open the sample: a waving robot",
   sample_note: "See how parts, pivots and keyframes work, and try changing it (opens as a new copy each time)",
+  import_shrunk: "Picture larger than the program can take (over 16000 px a side or 160 megapixels), so it was made just small enough: {names}",
 };
 const dict = { th, en };
 export function t(k: Key, vars?: Record<string, string | number>) {

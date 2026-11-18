@@ -98,10 +98,33 @@ const IMAGE_EXT = /\.(png|jpe?g|webp|gif|bmp|avif|svg|ico|tiff?)$/i;
 export const ACCEPT = "image/*,.psd,.svg";
 export function isProjectFile(f: File) { return /\.tstm$/i.test(f.name); }
 
-export interface ImportResult { layers: Layer[]; assets: Asset[]; failed: string[] }
+/** shrunk: pictures too big to work with, made smaller on the way in */
+export interface ImportResult { layers: Layer[]; assets: Asset[]; failed: string[]; shrunk: string[] }
+
+/**
+ * Largest picture kept as it is. Past this a canvas cannot hold it in one piece (and a 4 GB computer
+ * would run out of memory), so it is made smaller on import. 16000 px a side is about 54 × 54 cm at 300 dpi.
+ */
+export const MAX_SIDE = 16000, MAX_PIXELS = 160e6;
 
 async function sizeOf(blob: Blob): Promise<{ w: number; h: number }> {
+  // the size is in the file's header: no need to decode every pixel of a big picture just to read it
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = new Image(); img.decoding = "async"; img.src = url;
+    await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = () => rej(new Error("image")); });
+    if (img.naturalWidth && img.naturalHeight) return { w: img.naturalWidth, h: img.naturalHeight };
+  } catch { /* fall back to decoding it */ } finally { URL.revokeObjectURL(url); }
   const b = await createImageBitmap(blob); const s = { w: b.width, h: b.height }; b.close(); return s;
+}
+
+/** A picture past MAX_SIDE / MAX_PIXELS, made just small enough. */
+async function shrink(blob: Blob, w: number, h: number) {
+  const k = Math.min(MAX_SIDE / Math.max(w, h), Math.sqrt(MAX_PIXELS / (w * h)));
+  const nw = Math.max(1, Math.floor(w * k)), nh = Math.max(1, Math.floor(h * k));
+  const bmp = await createImageBitmap(blob, { resizeWidth: nw, resizeHeight: nh, resizeQuality: "high", premultiplyAlpha: "none", colorSpaceConversion: "none" });
+  const c = new OffscreenCanvas(nw, nh); c.getContext("2d")!.drawImage(bmp, 0, 0); bmp.close();
+  return { blob: await c.convertToBlob({ type: "image/png" }), w: nw, h: nh };
 }
 /** SVG has no pixels; draw it once at a crisp size and keep the PNG. */
 async function rasterSvg(file: File): Promise<Blob> {
@@ -130,7 +153,7 @@ async function importPsd(file: File, p: Project): Promise<ImportResult> {
   walk(psd.children as Node[]);
   const k = Math.min(1, (p.w * 0.9) / psd.width, (p.h * 0.9) / psd.height);
   const ox = (p.w - psd.width * k) / 2, oy = (p.h - psd.height * k) / 2;
-  const res: ImportResult = { layers: [], assets: [], failed: [] };
+  const res: ImportResult = { layers: [], assets: [], failed: [], shrunk: [] };
   for (const n of flat) {
     const c = n.canvas!, blob = await canvasToBlob(c);
     const a: Asset = { id: uid(), name: n.name || file.name, type: "image/png", w: c.width, h: c.height };
@@ -145,7 +168,7 @@ async function importPsd(file: File, p: Project): Promise<ImportResult> {
 
 /** Turn dropped / picked files into layers placed in the middle of the frame. */
 export async function importFiles(files: File[], p: Project): Promise<ImportResult> {
-  const res: ImportResult = { layers: [], assets: [], failed: [] };
+  const res: ImportResult = { layers: [], assets: [], failed: [], shrunk: [] };
   let n = 0;
   for (const file of files) {
     try {
@@ -155,8 +178,9 @@ export async function importFiles(files: File[], p: Project): Promise<ImportResu
         continue;
       }
       if (!file.type.startsWith("image/") && !IMAGE_EXT.test(file.name)) { res.failed.push(file.name); continue; }
-      const blob = file.type === "image/svg+xml" || /\.svg$/i.test(file.name) ? await rasterSvg(file) : file;
-      const { w, h } = await sizeOf(blob);
+      let blob: Blob = file.type === "image/svg+xml" || /\.svg$/i.test(file.name) ? await rasterSvg(file) : file;
+      let { w, h } = await sizeOf(blob);
+      if (w > MAX_SIDE || h > MAX_SIDE || w * h > MAX_PIXELS) { ({ blob, w, h } = await shrink(blob, w, h)); res.shrunk.push(`${file.name} → ${w}×${h}`); }
       const a: Asset = { id: uid(), name: file.name, type: blob.type || "image/png", w, h };
       await putBlob(p.id, a.id, blob); await register(a, blob);
       const k = Math.min(1, (p.w * 0.8) / w, (p.h * 0.8) / h);
