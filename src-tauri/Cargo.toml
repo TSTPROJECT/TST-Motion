@@ -2,7 +2,7 @@
 name = "tst-motion"
 version = "0.7.1"
 description = "TST Motion: free 2D motion animation"
-license = "MIT"
+license = "GPL-3.0-or-later"
 edition = "2021"
 rust-version = "1.77"
 
